@@ -1,1 +1,21 @@
-{"name":"vppharm-report","private":true,"version":"1.0.0","type":"module","scripts":{"dev":"vite","build":"vite build","preview":"vite preview"},"dependencies":{"firebase":"^12.10.0","firebase-admin":"^13.7.0","openai":"^6.26.0","react":"^19.2.4","react-dom":"^19.2.4"},"devDependencies":{"@vitejs/plugin-react":"^5.1.4","vite":"^7.3.1"}}
+{
+  "name": "vppharm-report",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "firebase": "^10.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "openai": "^6.26.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.4",
+    "vite": "^7.3.1"
+  }
+}
