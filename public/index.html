@@ -1,0 +1,1065 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VP-PHARM | Báo cáo hiệu quả làm việc thông minh bằng AI</title>
+  <style>
+    :root{
+      --brand-1:#0B6AA7;
+      --brand-2:#14B8A6;
+      --bg-0:#070B14;
+      --card: rgba(255,255,255,.08);
+      --border: rgba(255,255,255,.18);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.72);
+      --danger:#EF4444;
+      --shadow: 0 20px 60px rgba(0,0,0,.45);
+      --radius: 18px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color:var(--text);
+      min-height:100vh;
+      background:
+        radial-gradient(1200px 700px at 15% 10%, rgba(20,184,166,.28), transparent 55%),
+        radial-gradient(900px 650px at 90% 20%, rgba(11,106,167,.35), transparent 60%),
+        radial-gradient(1000px 700px at 50% 100%, rgba(99,102,241,.20), transparent 60%),
+        linear-gradient(180deg, #070B14 0%, #040611 100%);
+      overflow-x:hidden;
+    }
+    .container{max-width:1100px;margin:0 auto;padding:20px}
+    header{
+      position:sticky;top:0;z-index:20;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      background: rgba(7,11,20,.55);
+      border-bottom:1px solid rgba(255,255,255,.08);
+    }
+    .header-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand img{width:44px;height:44px;border-radius:12px;object-fit:contain;background:rgba(255,255,255,.85);padding:6px}
+    .brand .title h1{margin:0;font-size:16px;font-weight:800}
+    .brand .title p{margin:0;font-size:12px;color:var(--muted)}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background: rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}
+    .btn{
+      appearance:none;border:none;cursor:pointer;
+      border-radius:14px;padding:10px 14px;
+      background: linear-gradient(135deg, rgba(11,106,167,.9), rgba(20,184,166,.85));
+      color:white;font-weight:800;
+      box-shadow: 0 12px 30px rgba(11,106,167,.20);
+      transition: transform .12s ease, filter .12s ease, opacity .12s ease;
+    }
+    .btn:hover{transform: translateY(-1px);filter:saturate(1.1)}
+    .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+    .btn.secondary{background: rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.14);font-weight:700;box-shadow:none}
+    .btn.danger{background: rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35);color:#fff;box-shadow:none}
+    .grid{display:grid;gap:14px}
+    .grid.two{grid-template-columns:1fr 1fr}
+    @media (max-width: 860px){ .grid.two{grid-template-columns:1fr} }
+    .card{
+      background: var(--card);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+    .card-header{padding:18px 18px 0}
+    .card-body{padding:18px}
+    .card h2{margin:0 0 6px;font-size:18px}
+    .card p{margin:0;color:var(--muted)}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .spacer{height:14px}
+    label{display:block;font-size:12px;color:var(--muted);margin:10px 0 6px}
+    input, select, textarea{
+      width:100%;
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.14);
+      color:var(--text);
+      border-radius:14px;
+      padding:11px 12px;
+      outline:none;
+      transition: border .12s ease, background .12s ease;
+    }
+    input:focus, select:focus, textarea:focus{border-color: rgba(20,184,166,.55);background: rgba(255,255,255,.085)}
+    textarea{min-height:92px;resize:vertical}
+    .hint{font-size:12px;color:var(--muted);margin-top:6px}
+    .small{font-size:12px;color:var(--muted)}
+    .hr{height:1px;background:rgba(255,255,255,.10);margin:16px 0}
+    .tag{display:inline-flex;align-items:center;gap:8px;padding:7px 10px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);font-size:12px;color:var(--muted)}
+    .overlay{
+      position:fixed;inset:0;z-index:50;
+      background: rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display:none;align-items:center;justify-content:center;padding:18px;
+    }
+    .overlay.show{display:flex}
+    .modal{
+      width:min(920px, 100%);
+      background: rgba(255,255,255,.09);
+      border:1px solid rgba(255,255,255,.18);
+      border-radius: 22px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.55);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      transform: translateY(10px) scale(.985);
+      opacity:0;
+      transition: transform .18s ease, opacity .18s ease;
+      overflow:hidden;
+    }
+    .overlay.show .modal{transform: translateY(0) scale(1); opacity:1}
+    .modal-top{
+      padding:16px 18px;
+      display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      background: linear-gradient(135deg, rgba(11,106,167,.20), rgba(20,184,166,.14));
+    }
+    .modal-top h3{margin:0;font-size:16px}
+    .modal-top p{margin:4px 0 0;color:var(--muted);font-size:12px}
+    .modal-content{padding:18px}
+    .modal-footer{
+      padding:14px 18px;
+      display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+      border-top:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.10);
+    }
+    .stepper{display:flex;gap:8px;flex-wrap:wrap}
+    .dot{height:8px;width:34px;border-radius:999px;background: rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.12)}
+    .dot.active{background: linear-gradient(135deg, rgba(11,106,167,.9), rgba(20,184,166,.85)); border-color:transparent}
+    .table{width:100%;border-collapse:collapse;overflow:hidden;border-radius:14px;border:1px solid rgba(255,255,255,.12)}
+    .table th,.table td{padding:10px 10px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left;font-size:13px;vertical-align:top}
+    .table th{color:var(--muted);font-weight:700;background: rgba(255,255,255,.06)}
+    .table tr:last-child td{border-bottom:none}
+    footer{
+      margin-top:22px;border-top:1px solid rgba(255,255,255,.08);
+      padding:18px 0 26px;color:rgba(255,255,255,.75);
+      background: rgba(7,11,20,.25);
+      backdrop-filter: blur(10px);-webkit-backdrop-filter: blur(10px);
+    }
+    .toast{
+      position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+      background: rgba(0,0,0,.55);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:999px;
+      padding:10px 14px;
+      color:#fff;
+      display:none;
+      z-index:80;
+      backdrop-filter: blur(12px);-webkit-backdrop-filter: blur(12px);
+    }
+    .toast.show{display:block}
+    .kbd{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="brand">
+      <img alt="VP-PHARM Logo" src="https://firebasestorage.googleapis.com/v0/b/cnlb-4d714.firebasestorage.app/o/lOGO%20DOC.png?alt=media&token=ad7d71e2-aa27-4ed5-81d8-9f8ee9ace0ac">
+      <div class="title">
+        <h1>Hệ thống báo cáo hiệu quả làm việc thông minh bằng AI</h1>
+        <p>VP-PHARM · Báo cáo tuần công tác cùng nhân viên sale</p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="pill"><span class="small">User:</span> <span id="userEmail" class="kbd">Chưa đăng nhập</span></div>
+      <button id="btnLogout" class="btn secondary" style="display:none">Đăng xuất</button>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div id="authView" class="grid two" style="margin-top:18px;">
+    <div class="card">
+      <div class="card-header">
+        <h2>Đăng nhập</h2>
+        <p>Đăng nhập bằng email Giám đốc kinh doanh</p>
+      </div>
+      <div class="card-body">
+        <label>Email</label>
+        <input id="loginEmail" type="email" placeholder="vd: gdkd@vppharm.vn" autocomplete="email"/>
+        <label>Mật khẩu</label>
+        <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password"/>
+        <div class="spacer"></div>
+        <button id="btnLogin" class="btn" style="width:100%;">Đăng nhập</button>
+        <div class="spacer"></div>
+        <button id="btnForgot" class="btn secondary" style="width:100%;">Quên mật khẩu</button>
+        <p class="hint">Tip: Nên bật MFA trong Firebase Console để tăng bảo mật.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Đăng ký</h2>
+        <p>Tạo tài khoản Giám đốc để lưu và xem lại báo cáo</p>
+      </div>
+      <div class="card-body">
+        <label>Email</label>
+        <input id="signupEmail" type="email" placeholder="vd: gdkd@vppharm.vn" autocomplete="email"/>
+        <label>Mật khẩu</label>
+        <input id="signupPassword" type="password" placeholder="Tối thiểu 8 ký tự" autocomplete="new-password"/>
+        <div class="spacer"></div>
+        <button id="btnSignup" class="btn" style="width:100%;">Tạo tài khoản</button>
+        <p class="hint">Sau khi đăng ký, bạn có thể vào ngay Dashboard và bắt đầu báo cáo.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="appView" style="display:none; margin-top:18px;">
+    <div class="grid two">
+      <div class="card">
+        <div class="card-header">
+          <h2>Dashboard báo cáo</h2>
+          <p>Tạo mới hoặc xem lại các báo cáo tuần theo tài khoản</p>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <button id="btnOpenWelcome" class="btn">+ Bắt đầu báo cáo tuần</button>
+            <button id="btnClearDraft" class="btn secondary">Xóa bản nháp (draft)</button>
+          </div>
+          <div class="hr"></div>
+          <div class="row">
+            <span class="tag">Auto-save draft: <b>ON</b></span>
+            <span class="tag">Lưu theo User: <b>Firestore</b></span>
+            <span class="tag">AI phân tích: <b>Cloud Functions</b></span>
+          </div>
+          <p class="hint">Back/Next không mất dữ liệu vì hệ thống giữ state + tự lưu bản nháp vào trình duyệt.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Danh sách báo cáo của bạn</h2>
+          <p>Click để xem lại nội dung + kết quả AI</p>
+        </div>
+        <div class="card-body">
+          <div id="reportsList" class="small">Chưa có báo cáo...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Xem báo cáo</h2>
+        <p>Chi tiết báo cáo đã lưu</p>
+      </div>
+      <div class="card-body">
+        <div id="reportViewer" class="small">Chọn 1 báo cáo ở danh sách bên trên.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="welcomeOverlay" class="overlay">
+  <div class="modal">
+    <div class="modal-top">
+      <div>
+        <h3>Chào mừng Giám Đốc Kinh Doanh VP-PHARM</h3>
+        <p>Báo cáo tuần làm việc của bạn để AI – VP-PHARM phân tích, hỗ trợ nâng cao hiệu quả điều hành.</p>
+      </div>
+      <button class="btn secondary" onclick="UI.closeWelcome()">Đóng</button>
+    </div>
+    <div class="modal-content">
+      <div class="grid two">
+        <div class="card" style="box-shadow:none;">
+          <div class="card-body">
+            <h2 style="margin:0 0 6px;">AI phân tích (tùy chọn)</h2>
+            <p class="small">Bấm để AI phân tích dựa trên dữ liệu báo cáo. Kết quả sẽ lưu vào báo cáo.</p>
+            <div class="spacer"></div>
+            <button id="btnAnalyzeNow" class="btn secondary" style="width:100%;">AI phân tích ngay (cần dữ liệu)</button>
+            <p class="hint">Bạn có thể điền xong rồi phân tích ở bước cuối để chuẩn nhất.</p>
+          </div>
+        </div>
+        <div class="card" style="box-shadow:none;">
+          <div class="card-body">
+            <h2 style="margin:0 0 6px;">Bắt đầu báo cáo</h2>
+            <p class="small">Wizard nhiều bước, có nút quay lại/tiếp theo, không mất dữ liệu.</p>
+            <div class="spacer"></div>
+            <button class="btn" style="width:100%;" onclick="UI.openWizard()">Bắt đầu báo cáo</button>
+            <p class="hint">Nếu đã có draft, hệ thống sẽ tự nạp lại.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="wizardOverlay" class="overlay">
+  <div class="modal">
+    <div class="modal-top">
+      <div>
+        <h3 id="wizardTitle">Báo cáo tuần công tác</h3>
+        <p id="wizardSub">Nhập số liệu 1 tuần đi công tác cùng nhân viên sale.</p>
+      </div>
+      <div class="row">
+        <div class="stepper" id="stepper"></div>
+        <button class="btn secondary" onclick="UI.closeWizard()">Đóng</button>
+      </div>
+    </div>
+
+    <div class="modal-content" id="wizardBody"></div>
+
+    <div class="modal-footer">
+      <div class="small" id="wizardLeftHint">Auto-save draft đang bật.</div>
+      <div class="row">
+        <button id="btnBack" class="btn secondary">Quay lại</button>
+        <button id="btnNext" class="btn">Tiếp theo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+  import {
+    getAuth, onAuthStateChanged,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    sendPasswordResetEmail,
+    signOut
+  } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+  import {
+    getFirestore,
+    collection, doc, getDoc, getDocs, addDoc,
+    query, orderBy, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-functions.js";
+
+  // ✅ Firebase config (của bạn)
+  const firebaseConfig = {
+    apiKey: "AIzaSyDxkm22xRpjMckegNdEvVs0-jHJ2UraVXM",
+    authDomain: "enthusiasts-golf-club-6868.firebaseapp.com",
+    projectId: "enthusiasts-golf-club-6868",
+    storageBucket: "enthusiasts-golf-club-6868.firebasestorage.app",
+    messagingSenderId: "698818839991",
+    appId: "1:698818839991:web:88181ce4eae924ee4c1432"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const functions = getFunctions(app);
+
+  const $ = (id) => document.getElementById(id);
+  const toast = (msg) => {
+    const t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(()=>t.classList.remove("show"), 2200);
+  };
+
+  const weekKey = (d=new Date())=>{
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+    const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1)/7);
+    return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2,"0")}`;
+  };
+
+  // Products: đọc từ collection "products" (import Excel lên Firestore)
+  async function loadProducts(){
+    const snap = await getDocs(query(collection(db, "products"), orderBy("name")));
+    const arr = [];
+    snap.forEach(d=>arr.push({ id:d.id, ...d.data() }));
+    if(!arr.length){
+      return [
+        {id:"p1", name:"(Demo) Sản phẩm A"},
+        {id:"p2", name:"(Demo) Sản phẩm B"},
+        {id:"p3", name:"(Demo) Sản phẩm C"},
+      ];
+    }
+    return arr.filter(x=>x.active!==false);
+  }
+
+  const DRAFT_KEY = "vppharm_weekly_report_draft_v1";
+  const State = {
+    step: 0,
+    products: [],
+    data: {
+      week: weekKey(),
+      tripStart: "",
+      tripEnd: "",
+      employeesCount: 1,
+      employees: [{
+        name: "",
+        planMeetCustomers: 0,
+        checkedInCustomers: 0,
+        revenueTarget: 0,
+        revenueActual: 0,
+        products: [],
+        productKnowledge: "",
+        relationship: "",
+        strength: "",
+        weakness: ""
+      }],
+      notesGeneral: "",
+      empSummary: "",
+      aiAnalysis: ""
+    }
+  };
+
+  function normalizeEmployees(){
+    const n = Math.max(1, Number(State.data.employeesCount||1));
+    State.data.employeesCount = n;
+    const cur = State.data.employees || [];
+    if(cur.length < n){
+      for(let i=cur.length;i<n;i++){
+        cur.push({
+          name:"",
+          planMeetCustomers:0,
+          checkedInCustomers:0,
+          revenueTarget:0,
+          revenueActual:0,
+          products:[],
+          productKnowledge:"",
+          relationship:"",
+          strength:"",
+          weakness:""
+        });
+      }
+    } else if(cur.length > n){
+      cur.length = n;
+    }
+    State.data.employees = cur;
+  }
+
+  function saveDraft(){
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({step: State.step, data: State.data}));
+  }
+  function loadDraft(){
+    try{
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if(!raw) return false;
+      const obj = JSON.parse(raw);
+      if(obj?.data){
+        State.data = obj.data;
+        State.step = obj.step ?? 0;
+        normalizeEmployees();
+        return true;
+      }
+    }catch(e){}
+    return false;
+  }
+  function clearDraft(){
+    localStorage.removeItem(DRAFT_KEY);
+    toast("Đã xóa draft.");
+  }
+
+  window.UI = {
+    openWelcome(){ $("welcomeOverlay").classList.add("show"); },
+    closeWelcome(){ $("welcomeOverlay").classList.remove("show"); },
+    openWizard(){
+      $("welcomeOverlay").classList.remove("show");
+      $("wizardOverlay").classList.add("show");
+      Wizard.render();
+    },
+    closeWizard(){
+      $("wizardOverlay").classList.remove("show");
+      saveDraft();
+      toast("Đã lưu draft.");
+    }
+  };
+
+  const steps = [
+    { title:"Thông tin tuần & chuyến đi", render: renderStepTrip },
+    { title:"Nhân sự đi cùng", render: renderStepEmployeesSetup },
+    { title:"Số liệu theo nhân viên", render: renderStepEmployeesDetails },
+    { title:"Tổng kết & lưu báo cáo", render: renderStepReviewSubmit }
+  ];
+
+  const Wizard = {
+    async init(){
+      State.products = await loadProducts();
+      if(!loadDraft()){
+        State.data.week = weekKey();
+        normalizeEmployees();
+        saveDraft();
+      }
+    },
+    setStep(i){
+      State.step = Math.min(Math.max(0,i), steps.length-1);
+      saveDraft();
+      Wizard.render();
+    },
+    render(){
+      const st = $("stepper");
+      st.innerHTML = "";
+      steps.forEach((_,idx)=>{
+        const d = document.createElement("div");
+        d.className = "dot"+(idx===State.step?" active":"");
+        st.appendChild(d);
+      });
+      $("wizardTitle").textContent = steps[State.step].title;
+      $("wizardBody").innerHTML = "";
+      steps[State.step].render($("wizardBody"));
+
+      $("btnBack").disabled = State.step===0;
+      $("btnNext").textContent = (State.step===steps.length-1) ? "Lưu báo cáo" : "Tiếp theo";
+    }
+  };
+
+  function renderStepTrip(root){
+    root.innerHTML = `
+      <div class="grid two">
+        <div>
+          <label>Tuần báo cáo (ISO Week)</label>
+          <input id="fWeek" type="text" placeholder="2026-W10" value="${escapeHtml(State.data.week||"")}"/>
+          <div class="hint">Format: <span class="kbd">YYYY-W##</span>.</div>
+        </div>
+        <div>
+          <label>Ghi chú chung (tuần)</label>
+          <input id="fNotesGeneral" type="text" placeholder="Ví dụ: mở mới địa bàn, focus SKU chủ lực..." value="${escapeHtml(State.data.notesGeneral||"")}"/>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="grid two">
+        <div>
+          <label>Giờ / Ngày đi công tác</label>
+          <input id="fTripStart" type="datetime-local" value="${escapeHtml(State.data.tripStart||"")}"/>
+        </div>
+        <div>
+          <label>Giờ / Ngày về</label>
+          <input id="fTripEnd" type="datetime-local" value="${escapeHtml(State.data.tripEnd||"")}"/>
+        </div>
+      </div>
+    `;
+
+    $("fWeek").addEventListener("input", e=>{ State.data.week = e.target.value.trim(); saveDraft(); });
+    $("fNotesGeneral").addEventListener("input", e=>{ State.data.notesGeneral = e.target.value; saveDraft(); });
+    $("fTripStart").addEventListener("input", e=>{ State.data.tripStart = e.target.value; saveDraft(); });
+    $("fTripEnd").addEventListener("input", e=>{ State.data.tripEnd = e.target.value; saveDraft(); });
+  }
+
+  function renderStepEmployeesSetup(root){
+    normalizeEmployees();
+    const n = State.data.employeesCount;
+
+    root.innerHTML = `
+      <div class="grid two">
+        <div>
+          <label>Đi với mấy nhân viên? (nhập số)</label>
+          <input id="fEmpCount" type="number" min="1" step="1" value="${n}"/>
+          <div class="hint">Nếu số &gt; 1, hệ thống sẽ tự tạo ô nhập tên tương ứng.</div>
+        </div>
+        <div>
+          <label>Đi cùng nhân viên (tóm tắt)</label>
+          <input id="fEmpSummary" type="text" placeholder="VD: TDV tuyến Hà Nội + Hải Dương..." value="${escapeHtml(State.data.empSummary||"")}"/>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div id="namesBox" class="grid two"></div>
+    `;
+
+    $("fEmpCount").addEventListener("input", (e)=>{
+      State.data.employeesCount = Number(e.target.value||1);
+      normalizeEmployees();
+      saveDraft();
+      renderStepEmployeesSetup(root);
+    });
+    $("fEmpSummary").addEventListener("input", (e)=>{
+      State.data.empSummary = e.target.value;
+      saveDraft();
+    });
+
+    const namesBox = $("namesBox");
+    State.data.employees.forEach((emp, idx)=>{
+      const wrap = document.createElement("div");
+      wrap.innerHTML = `
+        <label>Tên nhân viên #${idx+1}</label>
+        <input id="empName_${idx}" type="text" placeholder="Nhập tên nhân viên" value="${escapeHtml(emp.name||"")}"/>
+      `;
+      namesBox.appendChild(wrap);
+      wrap.querySelector("input").addEventListener("input", (e)=>{
+        State.data.employees[idx].name = e.target.value;
+        saveDraft();
+      });
+    });
+  }
+
+  function renderStepEmployeesDetails(root){
+    normalizeEmployees();
+    root.innerHTML = `
+      <div class="hint">Mỗi nhân viên có bộ số liệu riêng. “Hàng mục tiêu” chọn sản phẩm sẽ sinh dòng nhập kế hoạch/đã chốt.</div>
+      <div class="hr"></div>
+      <div id="emps"></div>
+    `;
+
+    const emps = root.querySelector("#emps");
+    State.data.employees.forEach((emp, idx)=>{
+      const card = document.createElement("div");
+      card.className = "card";
+      card.style.boxShadow = "none";
+      card.style.marginBottom = "14px";
+      card.innerHTML = `
+        <div class="card-body">
+          <div class="row" style="justify-content:space-between;">
+            <div>
+              <h2 style="margin:0;">Nhân viên #${idx+1}: ${escapeHtml(emp.name||"(chưa đặt tên)")}</h2>
+              <p class="small">Nhập số liệu thực tế trong chuyến công tác.</p>
+            </div>
+            <span class="tag">Auto-save</span>
+          </div>
+
+          <div class="grid two">
+            <div>
+              <label>Kế hoạch gặp số khách hàng</label>
+              <input id="pmc_${idx}" type="number" min="0" step="1" value="${num(emp.planMeetCustomers)}"/>
+            </div>
+            <div>
+              <label>Số khách hàng đã check in cùng TDV</label>
+              <input id="cic_${idx}" type="number" min="0" step="1" value="${num(emp.checkedInCustomers)}"/>
+            </div>
+          </div>
+
+          <div class="grid two">
+            <div>
+              <label>Doanh số mục tiêu</label>
+              <input id="rt_${idx}" type="number" min="0" step="1000" value="${num(emp.revenueTarget)}" placeholder="VND"/>
+            </div>
+            <div>
+              <label>Doanh số đạt</label>
+              <input id="ra_${idx}" type="number" min="0" step="1000" value="${num(emp.revenueActual)}" placeholder="VND"/>
+            </div>
+          </div>
+
+          <div class="hr"></div>
+
+          <div class="grid two">
+            <div>
+              <label>Hàng mục tiêu (chọn sản phẩm)</label>
+              <select id="prodSel_${idx}">
+                <option value="">-- Chọn sản phẩm --</option>
+                ${State.products.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
+              </select>
+              <div class="hint">Chọn xong sẽ tạo dòng nhập: Kế hoạch bán / Đã chốt.</div>
+            </div>
+            <div>
+              <label>Danh sách hàng mục tiêu đã chọn</label>
+              <div id="prodList_${idx}" class="small"></div>
+            </div>
+          </div>
+
+          <div class="grid two">
+            <div>
+              <label>Kiến thức sản phẩm của nhân viên</label>
+              <textarea id="pk_${idx}" placeholder="Nhận xét ngắn, cụ thể...">${escapeHtml(emp.productKnowledge||"")}</textarea>
+            </div>
+            <div>
+              <label>Mối quan hệ với khách hàng</label>
+              <textarea id="rel_${idx}" placeholder="Mức độ thân thiết, ảnh hưởng...">${escapeHtml(emp.relationship||"")}</textarea>
+            </div>
+          </div>
+
+          <div class="grid two">
+            <div>
+              <label>Điểm mạnh</label>
+              <textarea id="str_${idx}" placeholder="VD: chốt tốt, follow-up tốt...">${escapeHtml(emp.strength||"")}</textarea>
+            </div>
+            <div>
+              <label>Điểm yếu</label>
+              <textarea id="wek_${idx}" placeholder="VD: chưa nắm SP, ngại phản đối...">${escapeHtml(emp.weakness||"")}</textarea>
+            </div>
+          </div>
+        </div>
+      `;
+      emps.appendChild(card);
+
+      card.querySelector(`#pmc_${idx}`).addEventListener("input", e=>{ emp.planMeetCustomers = Number(e.target.value||0); saveDraft(); });
+      card.querySelector(`#cic_${idx}`).addEventListener("input", e=>{ emp.checkedInCustomers = Number(e.target.value||0); saveDraft(); });
+      card.querySelector(`#rt_${idx}`).addEventListener("input", e=>{ emp.revenueTarget = Number(e.target.value||0); saveDraft(); });
+      card.querySelector(`#ra_${idx}`).addEventListener("input", e=>{ emp.revenueActual = Number(e.target.value||0); saveDraft(); });
+
+      card.querySelector(`#pk_${idx}`).addEventListener("input", e=>{ emp.productKnowledge = e.target.value; saveDraft(); });
+      card.querySelector(`#rel_${idx}`).addEventListener("input", e=>{ emp.relationship = e.target.value; saveDraft(); });
+      card.querySelector(`#str_${idx}`).addEventListener("input", e=>{ emp.strength = e.target.value; saveDraft(); });
+      card.querySelector(`#wek_${idx}`).addEventListener("input", e=>{ emp.weakness = e.target.value; saveDraft(); });
+
+      const sel = card.querySelector(`#prodSel_${idx}`);
+      sel.addEventListener("change", ()=>{
+        const pid = sel.value;
+        if(!pid) return;
+        const prod = State.products.find(x=>x.id===pid);
+        if(!prod) return;
+        emp.products = emp.products || [];
+        if(emp.products.some(x=>x.productId===pid)){
+          toast("Sản phẩm đã được chọn.");
+          sel.value = "";
+          return;
+        }
+        emp.products.push({ productId: pid, productName: prod.name, planQty: 0, closedQty: 0 });
+        sel.value = "";
+        saveDraft();
+        renderProductsList(idx);
+      });
+
+      renderProductsList(idx);
+
+      function renderProductsList(empIdx){
+        const emp = State.data.employees[empIdx];
+        const box = document.getElementById(`prodList_${empIdx}`);
+        const items = emp.products || [];
+        if(!items.length){
+          box.innerHTML = `<span class="small">(Chưa chọn sản phẩm)</span>`;
+          return;
+        }
+        box.innerHTML = `
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Sản phẩm</th>
+                <th style="width:140px">Kế hoạch</th>
+                <th style="width:140px">Đã chốt</th>
+                <th style="width:90px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map((it, i)=>`
+                <tr>
+                  <td>${escapeHtml(it.productName)}</td>
+                  <td><input data-k="plan" data-i="${i}" type="number" min="0" step="1" value="${num(it.planQty)}"/></td>
+                  <td><input data-k="closed" data-i="${i}" type="number" min="0" step="1" value="${num(it.closedQty)}"/></td>
+                  <td><button class="btn danger" data-del="${i}" type="button">Xóa</button></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+
+        box.querySelectorAll("input[data-k]").forEach(inp=>{
+          inp.addEventListener("input", ()=>{
+            const i = Number(inp.getAttribute("data-i"));
+            const k = inp.getAttribute("data-k");
+            const v = Number(inp.value||0);
+            if(k==="plan") items[i].planQty = v;
+            if(k==="closed") items[i].closedQty = v;
+            saveDraft();
+          });
+        });
+        box.querySelectorAll("button[data-del]").forEach(btn=>{
+          btn.addEventListener("click", ()=>{
+            const i = Number(btn.getAttribute("data-del"));
+            items.splice(i,1);
+            saveDraft();
+            renderProductsList(empIdx);
+          });
+        });
+      }
+    });
+  }
+
+  function renderStepReviewSubmit(root){
+    normalizeEmployees();
+    const sum = summarize(State.data);
+
+    root.innerHTML = `
+      <div class="grid two">
+        <div class="card" style="box-shadow:none;">
+          <div class="card-body">
+            <h2 style="margin:0 0 6px;">Tóm tắt nhanh</h2>
+            <p class="small">Tuần: <b>${escapeHtml(State.data.week||"")}</b></p>
+            <p class="small">Đi công tác: <b>${escapeHtml(State.data.tripStart||"(chưa nhập)")}</b> → <b>${escapeHtml(State.data.tripEnd||"(chưa nhập)")}</b></p>
+            <p class="small">Số nhân viên: <b>${State.data.employeesCount}</b></p>
+            <div class="hr"></div>
+            <p class="small">Tổng kế hoạch gặp KH: <b>${sum.totalPlanMeet}</b></p>
+            <p class="small">Tổng check-in: <b>${sum.totalCheckin}</b></p>
+            <p class="small">Tổng doanh số mục tiêu: <b>${fmtMoney(sum.totalTarget)}</b></p>
+            <p class="small">Tổng doanh số đạt: <b>${fmtMoney(sum.totalActual)}</b></p>
+          </div>
+        </div>
+
+        <div class="card" style="box-shadow:none;">
+          <div class="card-body">
+            <h2 style="margin:0 0 6px;">AI phân tích</h2>
+            <p class="small">AI sẽ phân tích điều hành + coaching + ưu tiên hàng mục tiêu.</p>
+            <div class="spacer"></div>
+            <button id="btnAnalyze" class="btn secondary" style="width:100%;">Chạy AI phân tích & nạp kết quả</button>
+            <div class="spacer"></div>
+            <label>Kết quả AI (được lưu theo báo cáo)</label>
+            <textarea id="aiBox" placeholder="(Chưa có)">${escapeHtml(State.data.aiAnalysis||"")}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2 style="margin:0 0 10px;">Chi tiết theo nhân viên</h2>
+      <div class="small">${renderReviewTable(State.data)}</div>
+    `;
+
+    $("aiBox").addEventListener("input", e=>{ State.data.aiAnalysis = e.target.value; saveDraft(); });
+
+    $("btnAnalyze").addEventListener("click", async ()=>{
+      try{
+        $("btnAnalyze").disabled = true;
+        toast("Đang gọi AI phân tích...");
+        const fn = httpsCallable(functions, "analyzeWeeklyReport");
+        const res = await fn({ report: State.data });
+        const text = res?.data?.analysis || "";
+        State.data.aiAnalysis = text;
+        saveDraft();
+        $("aiBox").value = text;
+        toast("AI phân tích xong.");
+      }catch(err){
+        console.error(err);
+        toast("Lỗi AI. Kiểm tra Cloud Function / OPENAI_API_KEY.");
+      }finally{
+        $("btnAnalyze").disabled = false;
+      }
+    });
+  }
+
+  document.getElementById("btnBack").addEventListener("click", ()=> Wizard.setStep(State.step-1));
+  document.getElementById("btnNext").addEventListener("click", async ()=>{
+    if(State.step < steps.length-1){
+      Wizard.setStep(State.step+1);
+      return;
+    }
+    try{
+      const user = auth.currentUser;
+      if(!user){ toast("Bạn chưa đăng nhập."); return; }
+      if(!State.data.week){ toast("Bạn chưa nhập Tuần."); return; }
+
+      const reportDoc = {
+        ...State.data,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        uid: user.uid,
+        userEmail: user.email
+      };
+
+      const colRef = collection(db, "users", user.uid, "reports");
+      await addDoc(colRef, reportDoc);
+
+      clearDraft();
+      document.getElementById("wizardOverlay").classList.remove("show");
+      toast("Đã lưu báo cáo tuần.");
+      await loadReportsList();
+    }catch(err){
+      console.error(err);
+      toast("Lỗi lưu báo cáo. Kiểm tra Firestore rules.");
+    }
+  });
+
+  document.getElementById("btnLogin").addEventListener("click", async ()=>{
+    try{
+      await signInWithEmailAndPassword(auth, $("loginEmail").value.trim(), $("loginPassword").value);
+      toast("Đăng nhập thành công.");
+    }catch(err){
+      console.error(err);
+      toast("Đăng nhập thất bại.");
+    }
+  });
+
+  document.getElementById("btnSignup").addEventListener("click", async ()=>{
+    try{
+      await createUserWithEmailAndPassword(auth, $("signupEmail").value.trim(), $("signupPassword").value);
+      toast("Đăng ký thành công.");
+    }catch(err){
+      console.error(err);
+      toast("Đăng ký thất bại (email đã tồn tại?).");
+    }
+  });
+
+  document.getElementById("btnForgot").addEventListener("click", async ()=>{
+    try{
+      const email = $("loginEmail").value.trim();
+      if(!email){ toast("Nhập email ở ô đăng nhập trước."); return; }
+      await sendPasswordResetEmail(auth, email);
+      toast("Đã gửi email đặt lại mật khẩu.");
+    }catch(err){
+      console.error(err);
+      toast("Không gửi được email reset.");
+    }
+  });
+
+  document.getElementById("btnLogout").addEventListener("click", async ()=>{
+    await signOut(auth);
+    toast("Đã đăng xuất.");
+  });
+
+  document.getElementById("btnOpenWelcome").addEventListener("click", ()=> UI.openWelcome());
+  document.getElementById("btnClearDraft").addEventListener("click", clearDraft);
+  document.getElementById("btnAnalyzeNow").addEventListener("click", ()=> toast("Hãy điền dữ liệu xong rồi bấm AI phân tích ở bước cuối."));
+
+  async function loadReportsList(){
+    const user = auth.currentUser;
+    if(!user) return;
+    const list = $("reportsList");
+    list.textContent = "Đang tải...";
+    const qy = query(collection(db, "users", user.uid, "reports"), orderBy("createdAt","desc"));
+    const snap = await getDocs(qy);
+    if(snap.empty){
+      list.textContent = "Chưa có báo cáo...";
+      return;
+    }
+
+    const items = [];
+    snap.forEach(d=> items.push({id:d.id, ...d.data()}));
+
+    list.innerHTML = `
+      <table class="table">
+        <thead>
+          <tr><th>Tuần</th><th>Ngày tạo</th><th>Nhân viên</th><th></th></tr>
+        </thead>
+        <tbody>
+          ${items.map(it=>`
+            <tr>
+              <td><b>${escapeHtml(it.week||"")}</b></td>
+              <td>${fmtDate(it.createdAt)}</td>
+              <td>${Number(it.employeesCount||0)}</td>
+              <td><button class="btn secondary" data-open="${it.id}">Mở</button></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+
+    list.querySelectorAll("button[data-open]").forEach(btn=>{
+      btn.addEventListener("click", async ()=>{
+        const id = btn.getAttribute("data-open");
+        const ref = doc(db, "users", user.uid, "reports", id);
+        const snap2 = await getDoc(ref);
+        if(!snap2.exists()){ toast("Không tìm thấy báo cáo."); return; }
+        renderReportViewer(snap2.data(), id);
+      });
+    });
+  }
+
+  function renderReportViewer(rep, id){
+    const box = $("reportViewer");
+    const s = summarize(rep);
+    box.innerHTML = `
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <h2 style="margin:0 0 6px;">Báo cáo: <span class="kbd">${escapeHtml(rep.week||"")}</span></h2>
+          <p class="small">ID: <span class="kbd">${escapeHtml(id)}</span></p>
+        </div>
+        <div class="row">
+          <span class="tag">Nhân viên: <b>${Number(rep.employeesCount||0)}</b></span>
+          <span class="tag">DS đạt: <b>${fmtMoney(s.totalActual)}</b></span>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="grid two">
+        <div>
+          <p class="small"><b>Đi công tác:</b> ${escapeHtml(rep.tripStart||"")} → ${escapeHtml(rep.tripEnd||"")}</p>
+          <p class="small"><b>Ghi chú:</b> ${escapeHtml(rep.notesGeneral||"")}</p>
+          <div class="hr"></div>
+          <div class="small">${renderReviewTable(rep)}</div>
+        </div>
+        <div>
+          <h2 style="margin:0 0 8px;">Kết quả AI</h2>
+          <div class="card" style="box-shadow:none;">
+            <div class="card-body">
+              <div class="small" style="white-space:pre-wrap;">${escapeHtml(rep.aiAnalysis||"(Chưa có phân tích AI)")}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  onAuthStateChanged(auth, async (user)=>{
+    if(user){
+      $("userEmail").textContent = user.email || "(no email)";
+      $("btnLogout").style.display = "inline-flex";
+      $("authView").style.display = "none";
+      $("appView").style.display = "block";
+      await Wizard.init();
+      await loadReportsList();
+    }else{
+      $("userEmail").textContent = "Chưa đăng nhập";
+      $("btnLogout").style.display = "none";
+      $("authView").style.display = "grid";
+      $("appView").style.display = "none";
+      UI.closeWelcome();
+      UI.closeWizard();
+    }
+  });
+
+  function escapeHtml(str){
+    return String(str ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+  function num(x){ return Number(x||0); }
+  function fmtMoney(v){
+    const n = Number(v||0);
+    try{ return n.toLocaleString("vi-VN")+" ₫"; }catch{ return n+" ₫"; }
+  }
+  function fmtDate(ts){
+    try{
+      if(!ts) return "";
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleString("vi-VN");
+    }catch(e){ return ""; }
+  }
+  function summarize(d){
+    const emps = d.employees || [];
+    return {
+      totalPlanMeet: emps.reduce((s,e)=>s+num(e.planMeetCustomers),0),
+      totalCheckin: emps.reduce((s,e)=>s+num(e.checkedInCustomers),0),
+      totalTarget: emps.reduce((s,e)=>s+num(e.revenueTarget),0),
+      totalActual: emps.reduce((s,e)=>s+num(e.revenueActual),0),
+    };
+  }
+  function renderReviewTable(data){
+    const rows = (data.employees||[]).map((e,idx)=>{
+      const prods = (e.products||[]).map(p=>`${escapeHtml(p.productName)}: ${num(p.closedQty)}/${num(p.planQty)}`).join("<br/>") || "(none)";
+      return `
+        <tr>
+          <td>${idx+1}</td>
+          <td>${escapeHtml(e.name||"")}</td>
+          <td>${num(e.planMeetCustomers)}</td>
+          <td>${num(e.checkedInCustomers)}</td>
+          <td>${fmtMoney(num(e.revenueTarget))}</td>
+          <td>${fmtMoney(num(e.revenueActual))}</td>
+          <td>${prods}</td>
+        </tr>
+      `;
+    }).join("");
+    return `
+      <table class="table">
+        <thead>
+          <tr>
+            <th>#</th><th>Nhân viên</th><th>KH kế hoạch</th><th>Check-in</th><th>DS mục tiêu</th><th>DS đạt</th><th>Hàng mục tiêu (đã chốt/kế hoạch)</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+</script>
+
+<footer>
+  <div class="container">
+    <div class="small">
+      <b>CÔNG TY CỔ PHẦN DƯỢC VP-PHARM</b><br/>
+      Địa chỉ:  Lô B1.4-LK12 - KĐT Thanh Hà, Xã Bình Minh, TP Hà Nội<br/>
+      Điện thoại: 0975 498 284<br/>
+      <span style="opacity:.85">CÔNG NGHỆ GIÚP CUỘC SỐNG TRỞ NÊN TUYỆT VỜI VỚI AI CHAT-GPT PLUS.</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
