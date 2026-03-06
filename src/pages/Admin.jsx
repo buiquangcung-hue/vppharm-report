@@ -39,6 +39,12 @@ function formatDate(value) {
   }
 }
 
+function roleLabel(role) {
+  if (role === "admin") return "Admin";
+  if (role === "director") return "Giám đốc";
+  return "Người dùng";
+}
+
 export default function Admin({ adminEmail, isAdmin, onNotify }) {
   const [tab, setTab] = useState("users");
   const [users, setUsers] = useState([]);
@@ -150,9 +156,9 @@ export default function Admin({ adminEmail, isAdmin, onNotify }) {
       );
   }, [users]);
 
-  const directors = useMemo(() => {
+  const managers = useMemo(() => {
     return approved
-      .filter((u) => u.role === "director")
+      .filter((u) => ["director", "admin"].includes(u.role))
       .sort((a, b) =>
         String(a.name || a.email || "").localeCompare(
           String(b.name || b.email || ""),
@@ -177,12 +183,12 @@ export default function Admin({ adminEmail, isAdmin, onNotify }) {
       pending: pending.length,
       approved: approved.length,
       blocked: blocked.length,
-      directors: directors.length,
+      managers: managers.length,
       employees: activeEmployees.length,
       products: products.length,
       provinces: provinces.length,
     }),
-    [pending, approved, blocked, directors, activeEmployees, products, provinces]
+    [pending, approved, blocked, managers, activeEmployees, products, provinces]
   );
 
   async function approveUser(u) {
@@ -261,7 +267,9 @@ export default function Admin({ adminEmail, isAdmin, onNotify }) {
           role:
             (u.email || "").toLowerCase() === (adminEmail || "").toLowerCase()
               ? "admin"
-              : "pending",
+              : u.role === "director"
+              ? "director"
+              : "user",
           blockedAt: null,
           approvedAt: null,
           updatedAt: serverTimestamp(),
@@ -303,14 +311,14 @@ export default function Admin({ adminEmail, isAdmin, onNotify }) {
       const name = String(employeeForm.name || "").trim();
       const department = String(employeeForm.department || "").trim();
       const phone = String(employeeForm.phone || "").trim();
-      const director = directors.find((d) => d.id === employeeForm.managerUid) || null;
+      const manager = managers.find((d) => d.id === employeeForm.managerUid) || null;
 
       if (!code) throw new Error("Vui lòng nhập mã nhân viên.");
       if (!name) throw new Error("Vui lòng nhập họ và tên.");
       if (!department) throw new Error("Vui lòng nhập bộ phận.");
       if (!phone) throw new Error("Vui lòng nhập số điện thoại.");
       if (!employeeForm.managerUid) {
-        throw new Error("Vui lòng chọn giám đốc phụ trách.");
+        throw new Error("Vui lòng chọn người phụ trách.");
       }
 
       const codeExists = employees.some(
@@ -325,8 +333,9 @@ export default function Admin({ adminEmail, isAdmin, onNotify }) {
         name,
         department,
         phone,
-        managerUid: director?.id || "",
-        managerName: director?.name || director?.email || "",
+        managerUid: manager?.id || "",
+        managerName: manager?.name || manager?.email || "",
+        managerRole: manager?.role || "",
         active: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -485,7 +494,7 @@ export default function Admin({ adminEmail, isAdmin, onNotify }) {
               <span className="small">Blocked</span> <span className="kbd">{counts.blocked}</span>
             </span>
             <span className="pill">
-              <span className="small">Directors</span> <span className="kbd">{counts.directors}</span>
+              <span className="small">Managers</span> <span className="kbd">{counts.managers}</span>
             </span>
             <span className="pill">
               <span className="small">Employees</span> <span className="kbd">{counts.employees}</span>
@@ -690,7 +699,7 @@ export default function Admin({ adminEmail, isAdmin, onNotify }) {
                 </div>
 
                 <div>
-                  <label>Giám đốc phụ trách</label>
+                  <label>Người phụ trách</label>
                   <select
                     value={employeeForm.managerUid}
                     onChange={(e) =>
@@ -700,10 +709,10 @@ export default function Admin({ adminEmail, isAdmin, onNotify }) {
                       }))
                     }
                   >
-                    <option value="">-- Chọn giám đốc --</option>
-                    {directors.map((d) => (
+                    <option value="">-- Chọn người phụ trách --</option>
+                    {managers.map((d) => (
                       <option key={d.id} value={d.id}>
-                        {d.name || d.email || d.id}
+                        {d.name || d.email || d.id} ({roleLabel(d.role)})
                       </option>
                     ))}
                   </select>
@@ -753,7 +762,12 @@ export default function Admin({ adminEmail, isAdmin, onNotify }) {
                           </div>
 
                           <div className="small" style={{ marginTop: 4 }}>
-                            Giám đốc phụ trách: <span className="kbd">{u.managerName || "-"}</span>
+                            Người phụ trách: <span className="kbd">{u.managerName || "-"}</span>
+                          </div>
+
+                          <div className="small" style={{ marginTop: 4 }}>
+                            Vai trò phụ trách:{" "}
+                            <span className="kbd">{roleLabel(u.managerRole || "user")}</span>
                           </div>
 
                           <div className="small" style={{ marginTop: 4 }}>
@@ -1013,7 +1027,7 @@ function UserCard({ u, right }) {
             </div>
 
             <div className="small" style={{ marginTop: 8 }}>
-              role: <span className="kbd">{u.role || "pending"}</span> · status:{" "}
+              role: <span className="kbd">{u.role || "user"}</span> · status:{" "}
               <span className="kbd">{u.status || ""}</span>
             </div>
 
@@ -1063,7 +1077,7 @@ function ApprovedUserRoleRow({ u, adminEmail, onSave, onBlock }) {
             </div>
 
             <div className="small" style={{ marginTop: 4 }}>
-              Vai trò hiện tại: <span className="kbd">{u.role || "user"}</span>
+              Vai trò hiện tại: <span className="kbd">{roleLabel(u.role || "user")}</span>
             </div>
           </div>
 
@@ -1075,8 +1089,8 @@ function ApprovedUserRoleRow({ u, adminEmail, onSave, onBlock }) {
                 disabled={isRootAdmin}
                 onChange={(e) => setRole(e.target.value)}
               >
-                <option value="user">User</option>
-                <option value="director">Director</option>
+                <option value="user">Người dùng</option>
+                <option value="director">Giám đốc</option>
                 <option value="admin">Admin</option>
               </select>
             </div>

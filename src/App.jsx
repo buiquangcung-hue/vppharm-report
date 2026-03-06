@@ -60,6 +60,9 @@ export default function App() {
   const role = approval.role || "pending";
   const isDirector = role === "director";
   const canUseApp = authed && (isAdmin || approval.approved);
+  const canAccessWeekly = isAdmin || isDirector;
+  const canAccessReports = isAdmin || isDirector;
+  const canAccessAdmin = isAdmin;
 
   const roleLabel = useMemo(() => {
     if (isAdmin) return "Admin";
@@ -75,8 +78,31 @@ export default function App() {
       return;
     }
 
-    if (nextTab === "admin" && !isAdmin) {
-      setTab("weekly");
+    if (!canUseApp) {
+      setAuthOpen(true);
+      return;
+    }
+
+    if (nextTab === "admin" && !canAccessAdmin) {
+      setTab(canAccessWeekly ? "weekly" : "reports");
+      return;
+    }
+
+    if (nextTab === "weekly" && !canAccessWeekly) {
+      showNotice(
+        "Không có quyền truy cập",
+        "Chức năng Weekly chỉ dành cho Admin hoặc Giám đốc kinh doanh.",
+        "warning"
+      );
+      return;
+    }
+
+    if (nextTab === "reports" && !canAccessReports) {
+      showNotice(
+        "Không có quyền truy cập",
+        "Chức năng Reports chỉ dành cho Admin hoặc Giám đốc kinh doanh.",
+        "warning"
+      );
       return;
     }
 
@@ -222,7 +248,14 @@ export default function App() {
           return;
         }
 
-        setTab("weekly");
+        if (normalizedRole === "director") {
+          setTab("weekly");
+        } else if (normalizedRole === "user") {
+          setTab("weekly");
+        } else {
+          setTab("weekly");
+        }
+
         setAuthOpen(false);
         setReady(true);
       } catch (e) {
@@ -279,23 +312,27 @@ export default function App() {
                   <span className="kbd">{roleLabel}</span>
                 </div>
 
-                <button
-                  className="btn secondary"
-                  type="button"
-                  onClick={() => goTab("weekly")}
-                >
-                  Weekly
-                </button>
+                {(canAccessWeekly || canAccessReports) && (
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={() => goTab("weekly")}
+                  >
+                    Weekly
+                  </button>
+                )}
 
-                <button
-                  className="btn secondary"
-                  type="button"
-                  onClick={() => goTab("reports")}
-                >
-                  Reports
-                </button>
+                {canAccessReports ? (
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={() => goTab("reports")}
+                  >
+                    Reports
+                  </button>
+                ) : null}
 
-                {isAdmin ? (
+                {canAccessAdmin ? (
                   <button
                     className="btn secondary"
                     type="button"

@@ -6,7 +6,6 @@ import {
   orderBy,
   query,
   limit,
-  where,
 } from "firebase/firestore";
 
 function formatTs(ts) {
@@ -52,7 +51,38 @@ function getReportTitle(item) {
   );
 }
 
-export default function Reports({ isAdmin = false, isDirector = false }) {
+function removeVietnameseTones(str = "") {
+  return String(str)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+}
+
+function normalizeText(value = "") {
+  return removeVietnameseTones(String(value || ""))
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function matchesManagerFallback(employee, profile, currentUser) {
+  const employeeManagerName = normalizeText(employee?.managerName || "");
+  const profileName = normalizeText(profile?.name || "");
+  const userEmail = normalizeText(currentUser?.email || "");
+
+  if (!employeeManagerName) return false;
+  if (profileName && employeeManagerName === profileName) return true;
+  if (userEmail && employeeManagerName === userEmail) return true;
+
+  return false;
+}
+
+export default function Reports({
+  isAdmin = false,
+  isDirector = false,
+  profile = null,
+}) {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [error, setError] = useState("");
@@ -60,18 +90,60 @@ export default function Reports({ isAdmin = false, isDirector = false }) {
   useEffect(() => {
     setError("");
 
-    const uid = auth.currentUser?.uid || "";
-    const base = collection(db, "weekly_reports");
+    const currentUser = auth.currentUser;
+    const currentUid = currentUser?.uid || "";
 
-    const qy = isAdmin
-      ? query(base, orderBy("createdAt", "desc"), limit(50))
-      : query(base, where("ownerUid", "==", uid), limit(50));
+    const reportsQuery = query(
+      collection(db, "weekly_reports"),
+      orderBy("createdAt", "desc"),
+      limit(200)
+    );
 
-    const unsub = onSnapshot(
-      qy,
-      (snap) => {
-        const rows = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
+    const employeesQuery = query(collection(db, "employees"), limit(500));
+
+    let reportsCache = [];
+    let employeesCache = [];
+
+    function applyFilter() {
+      try {
+        const managedEmployeeIds = new Set(
+          employeesCache
+            .filter((emp) => emp.active !== false)
+            .filter((emp) => {
+              if (!isDirector) return false;
+
+              const managerUid = String(emp.managerUid || "").trim();
+              if (managerUid && currentUid && managerUid === currentUid) {
+                return true;
+              }
+
+              return matchesManagerFallback(emp, profile, currentUser);
+            })
+            .map((emp) => emp.id)
+        );
+
+        const rows = reportsCache
+          .filter((item) => {
+            if (isAdmin) return true;
+
+            if (isDirector) {
+              const ownerUid = String(item.ownerUid || "").trim();
+              const employeeUid =
+                String(item.employeeUid || item?.input?.employee?.uid || "").trim();
+
+              if (ownerUid && currentUid && ownerUid === currentUid) {
+                return true;
+              }
+
+              if (employeeUid && managedEmployeeIds.has(employeeUid)) {
+                return true;
+              }
+
+              return false;
+            }
+
+            return false;
+          })
           .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
 
         setItems(rows);
@@ -83,6 +155,19 @@ export default function Reports({ isAdmin = false, isDirector = false }) {
         if (!rows.length) {
           setSelectedId("");
         }
+      } catch (err) {
+        console.error("Reports filter error:", err);
+        setItems([]);
+        setSelectedId("");
+        setError("Không thể xử lý dữ liệu báo cáo. Vui lòng thử lại sau.");
+      }
+    }
+
+    const unsubReports = onSnapshot(
+      reportsQuery,
+      (snap) => {
+        reportsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        applyFilter();
       },
       (err) => {
         console.error("Reports snapshot error:", err);
@@ -92,8 +177,25 @@ export default function Reports({ isAdmin = false, isDirector = false }) {
       }
     );
 
-    return () => unsub();
-  }, [isAdmin, isDirector, selectedId]);
+    const unsubEmployees = onSnapshot(
+      employeesQuery,
+      (snap) => {
+        employeesCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        applyFilter();
+      },
+      (err) => {
+        console.error("Employees snapshot error:", err);
+        setItems([]);
+        setSelectedId("");
+        setError("Không thể tải danh mục nhân viên để phân quyền báo cáo.");
+      }
+    );
+
+    return () => {
+      unsubReports();
+      unsubEmployees();
+    };
+  }, [isAdmin, isDirector, profile?.name, selectedId]);
 
   const selected = useMemo(
     () => items.find((x) => x.id === selectedId) || null,
@@ -107,8 +209,10 @@ export default function Reports({ isAdmin = false, isDirector = false }) {
           <h2>Lịch sử báo cáo</h2>
           <p>
             {isAdmin
-              ? "Admin: xem tất cả báo cáo (50 bản ghi gần nhất)"
-              : "Bạn chỉ xem được các báo cáo do mình tạo"}
+              ? "Admin: xem tất cả báo cáo gần nhất trong hệ thống"
+              : isDirector
+              ? "Giám đốc: xem báo cáo do mình tạo và báo cáo của nhân viên thuộc team mình"
+              : "Bạn không có quyền xem báo cáo"}
           </p>
         </div>
         <div className="card-body">
@@ -121,7 +225,9 @@ export default function Reports({ isAdmin = false, isDirector = false }) {
             </span>
             <span className="pill">
               <span className="small">Quyền</span>{" "}
-              <span className="kbd">{isAdmin ? "admin" : isDirector ? "director" : "user"}</span>
+              <span className="kbd">
+                {isAdmin ? "admin" : isDirector ? "director" : "user"}
+              </span>
             </span>
           </div>
         </div>
@@ -176,11 +282,17 @@ export default function Reports({ isAdmin = false, isDirector = false }) {
                     </div>
 
                     <div className="small" style={{ marginTop: 6 }}>
-                      Nhân viên: <span className="kbd">{it.employeeName || it?.input?.employee?.name || "-"}</span>
+                      Nhân viên:{" "}
+                      <span className="kbd">
+                        {it.employeeName || it?.input?.employee?.name || "-"}
+                      </span>
                     </div>
 
                     <div className="small" style={{ marginTop: 6 }}>
-                      Địa bàn: <span className="kbd">{it.province || it?.input?.province || "-"}</span>
+                      Địa bàn:{" "}
+                      <span className="kbd">
+                        {it.province || it?.input?.province || "-"}
+                      </span>
                     </div>
 
                     {isAdmin ? (
@@ -232,7 +344,9 @@ export default function Reports({ isAdmin = false, isDirector = false }) {
                   </div>
                   <div>
                     <b>Địa bàn:</b>{" "}
-                    <span className="kbd">{selected.province || selected?.input?.province || "-"}</span>
+                    <span className="kbd">
+                      {selected.province || selected?.input?.province || "-"}
+                    </span>
                   </div>
                   <div>
                     <b>Tạo lúc:</b>{" "}
@@ -253,28 +367,46 @@ export default function Reports({ isAdmin = false, isDirector = false }) {
                 <div className="grid two">
                   <InfoBox
                     title="Số khách hàng đến viếng thăm"
-                    value={selected.visitCustomerCount ?? selected?.input?.visitCustomerCount ?? 0}
+                    value={
+                      selected.visitCustomerCount ??
+                      selected?.input?.visitCustomerCount ??
+                      0
+                    }
                   />
                   <InfoBox
                     title="Doanh số cả chuyến đi"
-                    value={formatVND(selected.tripRevenue ?? selected?.input?.tripRevenue ?? 0)}
+                    value={formatVND(
+                      selected.tripRevenue ?? selected?.input?.tripRevenue ?? 0
+                    )}
                   />
                 </div>
 
                 <div className="grid two">
                   <InfoBox
                     title="Tổng KH TDV phụ trách"
-                    value={selected.assignedCustomerCount ?? selected?.input?.assignedCustomerCount ?? 0}
+                    value={
+                      selected.assignedCustomerCount ??
+                      selected?.input?.assignedCustomerCount ??
+                      0
+                    }
                   />
                   <InfoBox
                     title="KH chưa khai thác"
-                    value={selected.unexploredCustomerCount ?? selected?.input?.unexploredCustomerCount ?? 0}
+                    value={
+                      selected.unexploredCustomerCount ??
+                      selected?.input?.unexploredCustomerCount ??
+                      0
+                    }
                   />
                 </div>
 
                 <InfoBox
                   title="Tổng KH toàn địa bàn"
-                  value={selected.totalMarketCustomerCount ?? selected?.input?.totalMarketCustomerCount ?? 0}
+                  value={
+                    selected.totalMarketCustomerCount ??
+                    selected?.input?.totalMarketCustomerCount ??
+                    0
+                  }
                 />
 
                 <div>
@@ -290,7 +422,9 @@ export default function Reports({ isAdmin = false, isDirector = false }) {
                       border: "1px solid rgba(255,255,255,.10)",
                     }}
                   >
-                    {selected.employeeStrengths || selected?.input?.employeeStrengths || "-"}
+                    {selected.employeeStrengths ||
+                      selected?.input?.employeeStrengths ||
+                      "-"}
                   </div>
                 </div>
 
@@ -307,7 +441,9 @@ export default function Reports({ isAdmin = false, isDirector = false }) {
                       border: "1px solid rgba(255,255,255,.10)",
                     }}
                   >
-                    {selected.employeeWeaknesses || selected?.input?.employeeWeaknesses || "-"}
+                    {selected.employeeWeaknesses ||
+                      selected?.input?.employeeWeaknesses ||
+                      "-"}
                   </div>
                 </div>
 
@@ -319,39 +455,48 @@ export default function Reports({ isAdmin = false, isDirector = false }) {
                     <div className="small">Không có dữ liệu mặt hàng.</div>
                   ) : (
                     <div style={{ display: "grid", gap: 10 }}>
-                      {(selected.productLines || selected?.input?.productLines || []).map((item, index) => (
-                        <div
-                          key={`${item.productId || item.productName || "p"}-${index}`}
-                          style={{
-                            padding: 12,
-                            background: "rgba(255,255,255,.06)",
-                            borderRadius: 14,
-                            border: "1px solid rgba(255,255,255,.10)",
-                          }}
-                        >
-                          <div style={{ fontWeight: 800 }}>{item.productName || "-"}</div>
-                          <div className="small" style={{ marginTop: 6 }}>
-                            ĐVT: <span className="kbd">{item.unit || "-"}</span>
+                      {(selected.productLines || selected?.input?.productLines || []).map(
+                        (item, index) => (
+                          <div
+                            key={`${item.productId || item.productName || "p"}-${index}`}
+                            style={{
+                              padding: 12,
+                              background: "rgba(255,255,255,.06)",
+                              borderRadius: 14,
+                              border: "1px solid rgba(255,255,255,.10)",
+                            }}
+                          >
+                            <div style={{ fontWeight: 800 }}>{item.productName || "-"}</div>
+                            <div className="small" style={{ marginTop: 6 }}>
+                              ĐVT: <span className="kbd">{item.unit || "-"}</span>
+                            </div>
+                            <div className="small" style={{ marginTop: 4 }}>
+                              Giá bán:{" "}
+                              <span className="kbd">{formatVND(item.price || 0)}</span>
+                            </div>
+                            <div className="small" style={{ marginTop: 4 }}>
+                              Số lượng: <span className="kbd">{item.quantity || 0}</span>
+                            </div>
+                            <div className="small" style={{ marginTop: 4 }}>
+                              Doanh số dự kiến:{" "}
+                              <span className="kbd">
+                                {formatVND(item.expectedRevenue || 0)}
+                              </span>
+                            </div>
                           </div>
-                          <div className="small" style={{ marginTop: 4 }}>
-                            Giá bán: <span className="kbd">{formatVND(item.price || 0)}</span>
-                          </div>
-                          <div className="small" style={{ marginTop: 4 }}>
-                            Số lượng: <span className="kbd">{item.quantity || 0}</span>
-                          </div>
-                          <div className="small" style={{ marginTop: 4 }}>
-                            Doanh số dự kiến:{" "}
-                            <span className="kbd">{formatVND(item.expectedRevenue || 0)}</span>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      )}
                     </div>
                   )}
 
                   <div className="pill" style={{ marginTop: 12 }}>
                     <span className="small">Tổng doanh số dự kiến:</span>{" "}
                     <span className="kbd">
-                      {formatVND(selected.totalExpectedRevenue ?? selected?.input?.totalExpectedRevenue ?? 0)}
+                      {formatVND(
+                        selected.totalExpectedRevenue ??
+                          selected?.input?.totalExpectedRevenue ??
+                          0
+                      )}
                     </span>
                   </div>
                 </div>

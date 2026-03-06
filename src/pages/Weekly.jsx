@@ -58,6 +58,25 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizeText(value = "") {
+  return removeVietnameseTones(String(value || ""))
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function matchesManagerFallback(employee, profile, currentUser) {
+  const employeeManagerName = normalizeText(employee?.managerName || "");
+  const profileName = normalizeText(profile?.name || "");
+  const userEmail = normalizeText(currentUser?.email || "");
+
+  if (!employeeManagerName) return false;
+  if (profileName && employeeManagerName === profileName) return true;
+  if (userEmail && employeeManagerName === userEmail) return true;
+
+  return false;
+}
+
 function toPlainTextAnalysis(analysisJson, fallbackText) {
   if (!analysisJson || typeof analysisJson !== "object") return fallbackText || "";
 
@@ -204,6 +223,8 @@ export default function Weekly({
         setLoadingMaster(true);
         setError("");
 
+        const currentUser = auth.currentUser;
+
         const [employeesSnap, productsSnap, provincesSnap] = await Promise.all([
           getDocs(collection(db, "employees")),
           getDocs(collection(db, "products")),
@@ -233,7 +254,18 @@ export default function Weekly({
           .filter((u) => u.active === true)
           .filter((u) => {
             if (isAdmin) return true;
-            if (isDirector) return u.managerUid === auth.currentUser?.uid;
+
+            if (isDirector) {
+              const managerUid = String(u.managerUid || "").trim();
+              const currentUid = String(currentUser?.uid || "").trim();
+
+              if (managerUid && currentUid && managerUid === currentUid) {
+                return true;
+              }
+
+              return matchesManagerFallback(u, profile, currentUser);
+            }
+
             return false;
           })
           .sort((a, b) =>
@@ -261,7 +293,7 @@ export default function Weekly({
     return () => {
       mounted = false;
     };
-  }, [isAdmin, isDirector]);
+  }, [isAdmin, isDirector, profile?.name]);
 
   const reportName = useMemo(
     () => buildWeeklyReportName(form.weekFrom, form.employeeName),
@@ -642,6 +674,11 @@ export default function Weekly({
                     </option>
                   ))}
                 </select>
+                {!isAdmin && isDirector && employees.length === 0 ? (
+                  <div className="small" style={{ marginTop: 6 }}>
+                    Hiện chưa có nhân viên nào được gán cho tài khoản giám đốc này.
+                  </div>
+                ) : null}
               </div>
 
               <div>
