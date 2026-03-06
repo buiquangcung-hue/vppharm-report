@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import Dashboard from "./pages/Dashboard.jsx";
 import Weekly from "./pages/Weekly.jsx";
 import Reports from "./pages/Reports.jsx";
 import Admin from "./pages/Admin.jsx";
@@ -21,7 +22,7 @@ function normalizeRole(profile, email) {
 }
 
 export default function App() {
-  const [tab, setTab] = useState("weekly");
+  const [tab, setTab] = useState("dashboard");
   const [authOpen, setAuthOpen] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [userEmail, setUserEmail] = useState("Chưa đăng nhập");
@@ -60,6 +61,8 @@ export default function App() {
   const role = approval.role || "pending";
   const isDirector = role === "director";
   const canUseApp = authed && (isAdmin || approval.approved);
+
+  const canAccessDashboard = isAdmin || isDirector;
   const canAccessWeekly = isAdmin || isDirector;
   const canAccessReports = isAdmin || isDirector;
   const canAccessAdmin = isAdmin;
@@ -72,6 +75,18 @@ export default function App() {
     return role || "Không xác định";
   }, [isAdmin, role]);
 
+  function getDefaultTab(nextIsAdmin, nextRole) {
+    if (nextIsAdmin || nextRole === "director") return "dashboard";
+    return "weekly";
+  }
+
+  function getFallbackTab() {
+    if (canAccessDashboard) return "dashboard";
+    if (canAccessWeekly) return "weekly";
+    if (canAccessReports) return "reports";
+    return "weekly";
+  }
+
   function goTab(nextTab) {
     if (!authed) {
       setAuthOpen(true);
@@ -83,8 +98,17 @@ export default function App() {
       return;
     }
 
+    if (nextTab === "dashboard" && !canAccessDashboard) {
+      showNotice(
+        "Không có quyền truy cập",
+        "Chức năng Dashboard chỉ dành cho Admin hoặc Giám đốc kinh doanh.",
+        "warning"
+      );
+      return;
+    }
+
     if (nextTab === "admin" && !canAccessAdmin) {
-      setTab(canAccessWeekly ? "weekly" : "reports");
+      setTab(getFallbackTab());
       return;
     }
 
@@ -125,7 +149,7 @@ export default function App() {
             role: "pending",
             status: "pending",
           });
-          setTab("weekly");
+          setTab("dashboard");
           setAuthOpen(true);
           setReady(true);
           return;
@@ -190,7 +214,7 @@ export default function App() {
             { merge: true }
           );
 
-          setTab("weekly");
+          setTab(getDefaultTab(true, "admin"));
           setAuthOpen(false);
           setReady(true);
           return;
@@ -221,7 +245,7 @@ export default function App() {
         });
 
         if (blocked) {
-          setTab("weekly");
+          setTab("dashboard");
           setAuthOpen(false);
           showNotice(
             "Tài khoản bị chặn",
@@ -235,7 +259,7 @@ export default function App() {
         }
 
         if (!approved) {
-          setTab("weekly");
+          setTab("dashboard");
           setAuthOpen(false);
           showNotice(
             "Đang chờ duyệt",
@@ -248,18 +272,11 @@ export default function App() {
           return;
         }
 
-        if (normalizedRole === "director") {
-          setTab("weekly");
-        } else if (normalizedRole === "user") {
-          setTab("weekly");
-        } else {
-          setTab("weekly");
-        }
-
+        setTab(getDefaultTab(false, normalizedRole));
         setAuthOpen(false);
         setReady(true);
       } catch (e) {
-        setTab("weekly");
+        setTab("dashboard");
         showNotice("Có lỗi xảy ra", String(e?.message || e), "error");
         setReady(true);
       }
@@ -270,7 +287,7 @@ export default function App() {
 
   async function logout() {
     await signOut(auth);
-    setTab("weekly");
+    setTab("dashboard");
     setAuthOpen(true);
     showNotice("Đăng xuất thành công", "Bạn đã đăng xuất khỏi hệ thống.", "success");
   }
@@ -312,11 +329,33 @@ export default function App() {
                   <span className="kbd">{roleLabel}</span>
                 </div>
 
+                {canAccessDashboard ? (
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={() => goTab("dashboard")}
+                    style={{
+                      borderColor:
+                        tab === "dashboard"
+                          ? "rgba(20,184,166,.5)"
+                          : "rgba(255,255,255,.15)",
+                    }}
+                  >
+                    Dashboard
+                  </button>
+                ) : null}
+
                 {(canAccessWeekly || canAccessReports) && (
                   <button
                     className="btn secondary"
                     type="button"
                     onClick={() => goTab("weekly")}
+                    style={{
+                      borderColor:
+                        tab === "weekly"
+                          ? "rgba(20,184,166,.5)"
+                          : "rgba(255,255,255,.15)",
+                    }}
                   >
                     Weekly
                   </button>
@@ -327,6 +366,12 @@ export default function App() {
                     className="btn secondary"
                     type="button"
                     onClick={() => goTab("reports")}
+                    style={{
+                      borderColor:
+                        tab === "reports"
+                          ? "rgba(20,184,166,.5)"
+                          : "rgba(255,255,255,.15)",
+                    }}
                   >
                     Reports
                   </button>
@@ -337,6 +382,12 @@ export default function App() {
                     className="btn secondary"
                     type="button"
                     onClick={() => goTab("admin")}
+                    style={{
+                      borderColor:
+                        tab === "admin"
+                          ? "rgba(20,184,166,.5)"
+                          : "rgba(255,255,255,.15)",
+                    }}
                   >
                     Admin
                   </button>
@@ -375,6 +426,12 @@ export default function App() {
               </div>
             </div>
           </div>
+        ) : tab === "dashboard" ? (
+          <Dashboard
+            profile={profile}
+            isAdmin={isAdmin}
+            isDirector={isDirector}
+          />
         ) : tab === "weekly" ? (
           <Weekly
             profile={profile}
@@ -397,19 +454,17 @@ export default function App() {
               onNotify={(title, message, type) => showNotice(title, message, type)}
             />
           ) : (
-            <Weekly
+            <Dashboard
               profile={profile}
               isAdmin={isAdmin}
               isDirector={isDirector}
-              onNotify={(title, message, type) => showNotice(title, message, type)}
             />
           )
         ) : (
-          <Weekly
+          <Dashboard
             profile={profile}
             isAdmin={isAdmin}
             isDirector={isDirector}
-            onNotify={(title, message, type) => showNotice(title, message, type)}
           />
         )}
       </div>
