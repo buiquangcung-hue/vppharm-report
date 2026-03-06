@@ -4,7 +4,8 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
 } from "firebase/auth";
-import { auth } from "../firebase.js";
+import { auth, db } from "../firebase.js";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 export default function AuthModal({ open, onClose }) {
   const [mode, setMode] = useState("login"); // login | signup | forgot
@@ -21,7 +22,7 @@ export default function AuthModal({ open, onClose }) {
   }, [mode]);
 
   const sub = useMemo(() => {
-    if (mode === "signup") return "Tạo tài khoản để lưu và xem lại báo cáo tuần.";
+    if (mode === "signup") return "Tài khoản mới sẽ ở trạng thái chờ Admin duyệt trước khi dùng hệ thống.";
     if (mode === "forgot") return "Nhập email để nhận link đặt lại mật khẩu.";
     return "Đăng nhập bằng email để vào Dashboard báo cáo.";
   }, [mode]);
@@ -62,12 +63,26 @@ export default function AuthModal({ open, onClose }) {
           show("Mật khẩu nhập lại không khớp.");
           return;
         }
-        await createUserWithEmailAndPassword(auth, e, pass);
-        show("Đăng ký thành công. Đang vào hệ thống…");
+
+        // 1) Create Firebase Auth user
+        const cred = await createUserWithEmailAndPassword(auth, e, pass);
+
+        // 2) Create Firestore profile (pending approval)
+        await setDoc(doc(db, "users", cred.user.uid), {
+          email: cred.user.email,
+          role: "pending",
+          approved: false,
+          blocked: false,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        show("Đăng ký thành công. Tài khoản đang chờ Admin duyệt.");
         onClose?.();
         return;
       }
 
+      // login
       await signInWithEmailAndPassword(auth, e, pass);
       show("Đăng nhập thành công.");
       onClose?.();
@@ -81,12 +96,12 @@ export default function AuthModal({ open, onClose }) {
   if (!open) return null;
 
   return (
-    <div className="overlay show" onMouseDown={onClose}>
+    <div className="overlay" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-top">
           <div>
-            <h3>{title}</h3>
-            <p>{sub}</p>
+            <h3 style={{ margin: 0, fontSize: 16 }}>{title}</h3>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--muted)" }}>{sub}</p>
           </div>
           <button className="btn secondary" onClick={onClose}>
             Đóng
@@ -128,7 +143,9 @@ export default function AuthModal({ open, onClose }) {
                     value={pass2}
                     onChange={(e) => setPass2(e.target.value)}
                   />
-                  <div className="hint">Khuyến nghị: dùng mật khẩu mạnh và bật MFA trong Firebase Console.</div>
+                  <div className="small" style={{ marginTop: 10 }}>
+                    Khuyến nghị: dùng mật khẩu mạnh và bật MFA trong Firebase Console.
+                  </div>
                 </>
               ) : null}
 
@@ -173,7 +190,7 @@ export default function AuthModal({ open, onClose }) {
               )}
 
               {msg ? (
-                <div style={{ marginTop: 12 }} className="tag">
+                <div style={{ marginTop: 12 }} className="small">
                   {msg}
                 </div>
               ) : null}
@@ -183,10 +200,7 @@ export default function AuthModal({ open, onClose }) {
 
         <div className="modal-footer">
           <div className="small">
-            Tip: Sau khi đăng nhập, bạn có thể tạo báo cáo tuần và xem lịch sử trong Reports.
-          </div>
-          <div className="small">
-            <span className="kbd">VP-PHARM</span> · AI Weekly Sales Intelligence
+            VP-PHARM · AI Weekly Sales Intelligence
           </div>
         </div>
       </div>

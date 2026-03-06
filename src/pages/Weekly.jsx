@@ -1,21 +1,30 @@
 import { useMemo, useState } from "react";
-import WeeklyReportForm from "../components/WeeklyReportForm.jsx";
-import { db } from "../firebase.js";
+import { db, auth } from "../firebase.js";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
 function toPlainTextAnalysis(analysisJson, fallbackText) {
   if (!analysisJson || typeof analysisJson !== "object") return fallbackText || "";
+
   const lines = [];
 
   const pushSection = (title, items) => {
     if (!items) return;
+
     lines.push(title);
+
     if (Array.isArray(items)) {
       for (const it of items) {
-        if (typeof it === "string") lines.push(`- ${it}`);
-        else if (it && typeof it === "object") {
+        if (typeof it === "string") {
+          lines.push(`- ${it}`);
+        } else if (it && typeof it === "object") {
           const t = it.title || it.name || it.staff || "Mục";
-          const r = it.reason || it.rationale || it.focus || it.owner || "";
+          const r =
+            it.reason ||
+            it.rationale ||
+            it.focus ||
+            it.owner ||
+            it.suggested_action ||
+            "";
           lines.push(`- ${t}${r ? `: ${r}` : ""}`);
         }
       }
@@ -24,6 +33,7 @@ function toPlainTextAnalysis(analysisJson, fallbackText) {
     } else {
       lines.push(JSON.stringify(items));
     }
+
     lines.push("");
   };
 
@@ -33,6 +43,7 @@ function toPlainTextAnalysis(analysisJson, fallbackText) {
   pushSection("Cơ hội", analysisJson.opportunities);
   pushSection("Coaching plan", analysisJson.coaching_plan);
   pushSection("Action plan tuần tới", analysisJson.action_plan);
+
   if (analysisJson.questions_to_clarify?.length) {
     pushSection("Câu hỏi cần làm rõ", analysisJson.questions_to_clarify);
   }
@@ -40,9 +51,19 @@ function toPlainTextAnalysis(analysisJson, fallbackText) {
   return lines.join("\n").trim();
 }
 
+function getWeekKeyHint() {
+  const d = new Date();
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+}
+
 export default function Weekly() {
   const [form, setForm] = useState({
-    weekKey: "",
+    weekKey: getWeekKeyHint(),
     results: "",
     people: "",
     risks: "",
@@ -53,6 +74,7 @@ export default function Weekly() {
   const [analysisText, setAnalysisText] = useState("");
   const [analysisJson, setAnalysisJson] = useState(null);
   const [savedId, setSavedId] = useState("");
+  const [error, setError] = useState("");
 
   const reportPayload = useMemo(() => {
     return {
@@ -64,94 +86,223 @@ export default function Weekly() {
     };
   }, [form]);
 
-  async function submit() {
+  function updateField(key, value) {
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  }
+
+  async function submitReport() {
     try {
       setLoading(true);
       setSavedId("");
+      setError("");
       setAnalysisText("");
       setAnalysisJson(null);
 
-      // 1) Call AI API
+      if (!auth.currentUser) {
+        throw new Error("Bạn chưa đăng nhập.");
+      }
+
+      if (!reportPayload.weekKey) {
+        throw new Error("Vui lòng nhập tuần báo cáo.");
+      }
+
+      // 1) Gọi AI API
       const res = await fetch("/api/analyzeWeeklyReport", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: reportPayload }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          report: reportPayload,
+        }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "API error");
+
+      if (!res.ok) {
+        throw new Error(data?.error || "API error");
+      }
 
       const aJson = data.analysis_json || null;
       const aText = data.analysis_text || data.analysis || "";
 
       setAnalysisJson(aJson);
+
       const prettyText = toPlainTextAnalysis(aJson, aText);
       setAnalysisText(prettyText);
 
-      // 2) Save Firestore (client-side)
+      // 2) Lưu vào Firestore
+      const user = auth.currentUser;
+
       const docRef = await addDoc(collection(db, "weekly_reports"), {
         weekKey: reportPayload.weekKey || null,
+        ownerUid: user?.uid || null,
+        ownerEmail: user?.email || null,
         input: reportPayload,
         analysis_text: prettyText,
         analysis_json: aJson,
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
 
       setSavedId(docRef.id);
     } catch (e) {
-      setAnalysisText(`Lỗi: ${String(e?.message || e)}`);
+      const msg = String(e?.message || e);
+      setError(msg);
+      setAnalysisText(`Lỗi: ${msg}`);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 980, margin: "34px auto", padding: "0 14px", fontFamily: "Arial" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 14 }}>
-        <div>
-          <h1 style={{ margin: 0 }}>AI Weekly Sales Intelligence</h1>
-          <div style={{ color: "#666", marginTop: 6 }}>
-            VP-PHARM • Báo cáo tuần → AI phân tích → Lưu lịch sử
+    <div className="grid" style={{ gap: 14 }}>
+      <div className="card">
+        <div className="card-header">
+          <h2>AI Weekly Sales Intelligence</h2>
+          <p>VP-PHARM · Báo cáo tuần → AI phân tích → Lưu lịch sử</p>
+        </div>
+
+        <div className="card-body">
+          <div className="grid two">
+            <div>
+              <label>Tuần báo cáo (weekKey)</label>
+              <input
+                value={form.weekKey}
+                onChange={(e) => updateField("weekKey", e.target.value)}
+                placeholder="Ví dụ: 2026-W10"
+              />
+              <div className="small" style={{ marginTop: 8 }}>
+                Gợi ý: <span className="kbd">{getWeekKeyHint()}</span>
+              </div>
+            </div>
+
+            <div>
+              <label>Trạng thái lưu</label>
+              <div className="pill" style={{ marginTop: 2 }}>
+                {savedId ? (
+                  <>
+                    <span className="small">Đã lưu:</span>
+                    <span className="kbd">{savedId}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="small">Chưa lưu</span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-        <div style={{ fontSize: 12, color: "#666" }}>
-          {savedId ? (
-            <span>
-              Đã lưu Firestore: <b>{savedId}</b>
+
+          <div className="hr"></div>
+
+          <label>Kết quả tuần</label>
+          <textarea
+            rows={5}
+            value={form.results}
+            onChange={(e) => updateField("results", e.target.value)}
+            placeholder={`- Doanh thu: ...
+- Độ phủ / điểm bán active: ...
+- Khách hàng mới / rời bỏ: ...
+- Top SKU tăng / giảm: ...`}
+          />
+
+          <label>Con người (nhân sự / coaching)</label>
+          <textarea
+            rows={5}
+            value={form.people}
+            onChange={(e) => updateField("people", e.target.value)}
+            placeholder={`- NV vượt KPI: A, B (lý do)
+- NV dưới KPI: C (nguyên nhân)
+- Nhu cầu hỗ trợ / training / chính sách: ...`}
+          />
+
+          <label>Vận hành & rủi ro</label>
+          <textarea
+            rows={5}
+            value={form.risks}
+            onChange={(e) => updateField("risks", e.target.value)}
+            placeholder={`- Tồn kho bất thường: ...
+- Công nợ / COD / giao hàng: ...
+- Khiếu nại khách: ...
+- Đối thủ / biến động thị trường: ...`}
+          />
+
+          <label>Kế hoạch tuần tới</label>
+          <textarea
+            rows={5}
+            value={form.nextWeekPlan}
+            onChange={(e) => updateField("nextWeekPlan", e.target.value)}
+            placeholder={`- Mục tiêu doanh thu: ...
+- Mở điểm bán: ...
+- SKU trọng tâm: ...
+- Kế hoạch coaching: ...
+- CTKM / đề xuất hỗ trợ: ...`}
+          />
+
+          <div style={{ height: 14 }} />
+
+          <div className="row">
+            <button className="btn" onClick={submitReport} disabled={loading}>
+              {loading ? "AI đang phân tích..." : "Phân tích & Lưu báo cáo"}
+            </button>
+
+            <span className="small">
+              AI sẽ trả JSON cấu trúc và lưu báo cáo vào Firestore.
             </span>
-          ) : (
-            <span>Chưa lưu</span>
-          )}
+          </div>
+
+          {error ? (
+            <div style={{ marginTop: 12 }} className="small">
+              Lỗi: {error}
+            </div>
+          ) : null}
         </div>
       </div>
 
-      <div style={{ marginTop: 18, padding: 16, border: "1px solid #eee", borderRadius: 14 }}>
-        <WeeklyReportForm value={form} onChange={setForm} onSubmit={submit} loading={loading} />
-      </div>
-
-      <div style={{ marginTop: 18, padding: 16, border: "1px solid #eee", borderRadius: 14 }}>
-        <h2 style={{ marginTop: 0 }}>Kết quả phân tích AI</h2>
-        <div
-          style={{
-            whiteSpace: "pre-wrap",
-            background: "#f6f7f9",
-            padding: 14,
-            borderRadius: 12,
-            border: "1px solid #e9e9e9",
-            minHeight: 120,
-          }}
-        >
-          {analysisText || "Chưa có kết quả. Hãy nhập báo cáo và bấm “Phân tích & Lưu báo cáo”."}
+      <div className="card">
+        <div className="card-header">
+          <h2>Kết quả phân tích AI</h2>
+          <p>Executive summary, cảnh báo, cơ hội, coaching và action plan</p>
         </div>
 
-        {analysisJson ? (
-          <details style={{ marginTop: 12 }}>
-            <summary style={{ cursor: "pointer", fontWeight: 700 }}>Xem JSON cấu trúc</summary>
-            <pre style={{ overflow: "auto", background: "#0b1020", color: "#d6e2ff", padding: 12, borderRadius: 12 }}>
-              {JSON.stringify(analysisJson, null, 2)}
-            </pre>
-          </details>
-        ) : null}
+        <div className="card-body">
+          <div
+            style={{
+              whiteSpace: "pre-wrap",
+              background: "rgba(255,255,255,.06)",
+              padding: 14,
+              borderRadius: 14,
+              border: "1px solid rgba(255,255,255,.10)",
+              minHeight: 160,
+            }}
+          >
+            {analysisText || "Chưa có kết quả. Hãy nhập báo cáo và bấm “Phân tích & Lưu báo cáo”."}
+          </div>
+
+          {analysisJson ? (
+            <details style={{ marginTop: 12 }}>
+              <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+                Xem JSON cấu trúc
+              </summary>
+              <pre
+                style={{
+                  overflow: "auto",
+                  background: "rgba(0,0,0,.25)",
+                  color: "#d6e2ff",
+                  padding: 12,
+                  borderRadius: 12,
+                  marginTop: 10,
+                }}
+              >
+                {JSON.stringify(analysisJson, null, 2)}
+              </pre>
+            </details>
+          ) : null}
+        </div>
       </div>
     </div>
   );
