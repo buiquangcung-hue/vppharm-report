@@ -43,6 +43,58 @@ function buildWeeklyReportDisplayName(weekFrom, employeeName) {
   return `BC_Tuan_${dd}/${mm}/${yy}_${employeeName || "Nhân viên"}`;
 }
 
+function formatVNDate(dateStr = "") {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function getWeekRangeFromInput(weekValue = "") {
+  if (!weekValue || !/^(\d{4})-W(\d{2})$/.test(weekValue)) {
+    return { weekFrom: "", weekTo: "" };
+  }
+
+  const [, yearStr, weekStr] = weekValue.match(/^(\d{4})-W(\d{2})$/) || [];
+  const year = Number(yearStr);
+  const week = Number(weekStr);
+
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const mondayOfWeek1 = new Date(jan4);
+  mondayOfWeek1.setUTCDate(jan4.getUTCDate() - jan4Day + 1);
+
+  const monday = new Date(mondayOfWeek1);
+  monday.setUTCDate(mondayOfWeek1.getUTCDate() + (week - 1) * 7);
+
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+
+  const toLocalDateInput = (utcDate) => {
+    const y = utcDate.getUTCFullYear();
+    const m = String(utcDate.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(utcDate.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  return {
+    weekFrom: toLocalDateInput(monday),
+    weekTo: toLocalDateInput(sunday),
+  };
+}
+
+function getWeekLabel(weekValue = "") {
+  if (!weekValue) return "";
+  const match = weekValue.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return "";
+  return `Tuần ${match[2]}/${match[1]}`;
+}
+
 function formatVND(value) {
   const amount = Number(value || 0);
   return new Intl.NumberFormat("vi-VN", {
@@ -311,6 +363,7 @@ function AnalysisSection({ title, data }) {
 }
 
 const initialForm = {
+  weekCode: "",
   weekFrom: "",
   weekTo: "",
   employeeUid: "",
@@ -468,6 +521,17 @@ export default function Weekly({
     }));
   }
 
+  function handleWeekChange(weekCode) {
+    const { weekFrom, weekTo } = getWeekRangeFromInput(weekCode);
+
+    setForm((prev) => ({
+      ...prev,
+      weekCode,
+      weekFrom,
+      weekTo,
+    }));
+  }
+
   function handleEmployeeChange(employeeUid) {
     const selected = employees.find((e) => e.id === employeeUid) || null;
 
@@ -590,11 +654,12 @@ export default function Weekly({
         throw new Error("Chỉ Admin hoặc Giám đốc kinh doanh mới được tạo báo cáo này.");
       }
 
-      if (!form.weekFrom) throw new Error("Vui lòng chọn từ ngày.");
-      if (!form.weekTo) throw new Error("Vui lòng chọn đến ngày.");
+      if (!form.weekCode || !form.weekFrom || !form.weekTo) {
+        throw new Error("Vui lòng chọn tuần làm việc.");
+      }
 
       if (new Date(form.weekTo).getTime() < new Date(form.weekFrom).getTime()) {
-        throw new Error("Đến ngày không thể nhỏ hơn từ ngày.");
+        throw new Error("Tuần làm việc không hợp lệ.");
       }
 
       if (!form.employeeUid) throw new Error("Vui lòng chọn nhân viên đi cùng.");
@@ -672,6 +737,7 @@ export default function Weekly({
       const reportPayload = {
         reportName,
         reportDisplayName,
+        weekCode: form.weekCode,
         weekFrom: form.weekFrom,
         weekTo: form.weekTo,
 
@@ -752,6 +818,7 @@ export default function Weekly({
       const docRef = await addDoc(collection(db, "weekly_reports"), {
         reportName,
         reportDisplayName,
+        weekCode: form.weekCode,
 
         weekFrom: form.weekFrom,
         weekTo: form.weekTo,
@@ -921,27 +988,27 @@ export default function Weekly({
                   subtitle="Thiết lập tuần làm việc, nhân viên đi cùng và địa bàn phụ trách."
                 />
 
-                <div className="grid two">
-                  <div>
-                    <FieldLabel required>Từ ngày</FieldLabel>
-                    <input
-                      type="date"
-                      required
-                      value={form.weekFrom}
-                      onChange={(e) => updateField("weekFrom", e.target.value)}
-                      disabled={loading}
-                    />
-                  </div>
-
-                  <div>
-                    <FieldLabel required>Đến ngày</FieldLabel>
-                    <input
-                      type="date"
-                      required
-                      value={form.weekTo}
-                      onChange={(e) => updateField("weekTo", e.target.value)}
-                      disabled={loading}
-                    />
+                <div>
+                  <FieldLabel required>Chọn tuần làm việc</FieldLabel>
+                  <input
+                    type="week"
+                    required
+                    value={form.weekCode}
+                    onChange={(e) => handleWeekChange(e.target.value)}
+                    disabled={loading}
+                  />
+                  <div className="small" style={{ marginTop: 8 }}>
+                    {form.weekCode ? (
+                      <>
+                        <span className="kbd">{getWeekLabel(form.weekCode)}</span>
+                        <span style={{ margin: "0 8px", opacity: 0.6 }}>•</span>
+                        <span className="kbd">
+                          {formatVNDate(form.weekFrom)} → {formatVNDate(form.weekTo)}
+                        </span>
+                      </>
+                    ) : (
+                      "Chọn 1 tuần, hệ thống sẽ tự tính từ ngày đến ngày."
+                    )}
                   </div>
                 </div>
 
@@ -990,6 +1057,14 @@ export default function Weekly({
                   <div>
                     <FieldLabel>Tên báo cáo</FieldLabel>
                     <input value={reportDisplayName || ""} disabled />
+                    <div className="small" style={{ marginTop: 6 }}>
+                      Kỳ báo cáo:{" "}
+                      <span className="kbd">
+                        {form.weekFrom && form.weekTo
+                          ? `${formatVNDate(form.weekFrom)} → ${formatVNDate(form.weekTo)}`
+                          : "--/--/---- → --/--/----"}
+                      </span>
+                    </div>
                   </div>
 
                   <div>
@@ -1381,7 +1456,11 @@ export default function Weekly({
             <StatCard
               title="Tên báo cáo"
               value={reportDisplayName || "-"}
-              sub="Sinh tự động theo tuần làm việc và nhân viên"
+              sub={
+                form.weekCode
+                  ? `${getWeekLabel(form.weekCode)} • ${formatVNDate(form.weekFrom)} → ${formatVNDate(form.weekTo)}`
+                  : "Sinh tự động theo tuần làm việc và nhân viên"
+              }
             />
             <StatCard
               title="Doanh số dự kiến"

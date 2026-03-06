@@ -53,6 +53,29 @@ function formatPct(value) {
   return `${sign}${num.toFixed(1)}%`;
 }
 
+function formatVNDate(value) {
+  if (!value) return "";
+  const d = value?.toDate ? value.toDate() : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function formatVNDateTime(value) {
+  if (!value) return "";
+  const d = value?.toDate ? value.toDate() : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("vi-VN");
+}
+
+function formatWeekLabel(weekCode = "") {
+  const match = String(weekCode || "").match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return "";
+  return `Tuần ${match[2]}/${match[1]}`;
+}
+
 function toMillis(value) {
   if (!value) return 0;
   if (typeof value?.toMillis === "function") return value.toMillis();
@@ -346,7 +369,11 @@ function InsightList({ items, emptyText }) {
             lineHeight: 1.6,
           }}
         >
-          {typeof item === "string" ? item : JSON.stringify(item)}
+          {typeof item === "string"
+            ? item
+            : item?.title
+            ? `${item.title}${item?.reason ? `: ${item.reason}` : ""}`
+            : JSON.stringify(item)}
         </div>
       ))}
     </div>
@@ -772,7 +799,10 @@ export default function Dashboard({
 
     const weekMap = new Map();
     for (const r of currentReports) {
-      const key = String(r.weekFrom || r?.input?.weekFrom || "").slice(5, 10) || "N/A";
+      const weekCode = r.weekCode || r?.input?.weekCode || "";
+      const weekLabel = formatWeekLabel(weekCode);
+      const fallbackLabel = String(r.weekFrom || r?.input?.weekFrom || "").slice(5, 10) || "N/A";
+      const key = weekLabel || fallbackLabel;
       weekMap.set(key, (weekMap.get(key) || 0) + Number(r.tripRevenue || 0));
     }
     const trendData = [...weekMap.entries()].map(([label, value]) => ({ label, value }));
@@ -804,9 +834,13 @@ export default function Dashboard({
     }
 
     if (currentTripRevenue >= prevTripRevenue) {
-      executiveWins.push(`Doanh số chuyến đi đang ${currentTripRevenue > prevTripRevenue ? "tăng" : "giữ ổn định"} so với kỳ trước (${formatPct(calcChange(currentTripRevenue, prevTripRevenue))}).`);
+      executiveWins.push(
+        `Doanh số chuyến đi đang ${currentTripRevenue > prevTripRevenue ? "tăng" : "giữ ổn định"} so với kỳ trước (${formatPct(calcChange(currentTripRevenue, prevTripRevenue))}).`
+      );
     } else {
-      executiveWarnings.push(`Doanh số chuyến đi giảm so với kỳ trước (${formatPct(calcChange(currentTripRevenue, prevTripRevenue))}).`);
+      executiveWarnings.push(
+        `Doanh số chuyến đi giảm so với kỳ trước (${formatPct(calcChange(currentTripRevenue, prevTripRevenue))}).`
+      );
     }
 
     if (topEmployee) {
@@ -834,6 +868,7 @@ export default function Dashboard({
         if (typeof item === "string") return item;
         if (item && typeof item === "object") {
           return (
+            item.action ||
             item.title ||
             item.name ||
             item.label ||
@@ -891,6 +926,87 @@ export default function Dashboard({
   }, [reports, employees, fromDate, toDate, today]);
 
   const healthTone = scoreTone(analytics.healthScore);
+
+  async function handleExportPDF() {
+    await exportDashboardPDF({
+      periodLabel:
+        preset === "7d"
+          ? "7 ngày"
+          : preset === "30d"
+          ? "30 ngày"
+          : preset === "90d"
+          ? "90 ngày"
+          : "Tùy chọn",
+      dateRange: {
+        start: fromDate,
+        end: toDate,
+      },
+      summary: {
+        totalReports: analytics.totalReports,
+        totalVisits: analytics.visits,
+        tripRevenue: analytics.tripRevenue,
+        expectedRevenue: analytics.expectedRevenue,
+        activeEmployees: analytics.employeeCount,
+      },
+      healthScore: {
+        total: analytics.healthScore,
+        coverage: analytics.coverageScore,
+        salesQuality: analytics.salesQualityScore,
+        marketExecution: analytics.marketExecutionScore,
+        label: scoreColor(analytics.healthScore),
+      },
+      executiveBrief: {
+        summary: `Dashboard điều hành tổng hợp từ ${analytics.totalReports} báo cáo trong kỳ ${formatVNDate(analytics.from)} → ${formatVNDate(analytics.to)}.`,
+        highlights: analytics.executiveWins,
+        warnings: analytics.executiveWarnings,
+        actions: analytics.suggestedActions,
+      },
+      aiExecutiveBrief: {
+        summary: `AI Health Score hiện tại ở mức ${analytics.healthScore}/100, phản ánh chất lượng độ phủ, doanh số và mức độ kiểm soát địa bàn trong kỳ.`,
+        salesFocus: `Doanh số chuyến đi đạt ${formatVND(analytics.tripRevenue)}, doanh số dự kiến đạt ${formatVND(analytics.expectedRevenue)}, biến động ${formatPct(analytics.tripRevenueChange)} so với kỳ trước.`,
+        risksNarrative:
+          analytics.executiveWarnings[0] ||
+          "Một số chỉ số điều hành vẫn cần tiếp tục theo dõi để tránh suy giảm hiệu quả đội ngũ.",
+        opportunitiesNarrative:
+          analytics.executiveWins[0] ||
+          "Hệ thống đang ghi nhận các cơ hội cải thiện từ độ phủ thị trường và tối ưu doanh số.",
+        highlights: analytics.executiveWins,
+        warnings: analytics.executiveWarnings,
+        riskBullets: analytics.risks.map((item) =>
+          typeof item === "string"
+            ? item
+            : item?.title
+            ? `${item.title}${item?.reason ? `: ${item.reason}` : ""}`
+            : JSON.stringify(item)
+        ),
+        opportunityBullets: analytics.opportunities.map((item) =>
+          typeof item === "string"
+            ? item
+            : item?.title
+            ? `${item.title}${item?.reason ? `: ${item.reason}` : ""}`
+            : JSON.stringify(item)
+        ),
+        nextActions: analytics.suggestedActions,
+      },
+      topEmployees: analytics.topEmployees,
+      topAreas: analytics.topProvinces,
+      risks: analytics.risks.map((item) =>
+        typeof item === "string"
+          ? item
+          : item?.title
+          ? `${item.title}${item?.reason ? `: ${item.reason}` : ""}`
+          : JSON.stringify(item)
+      ),
+      opportunities: analytics.opportunities.map((item) =>
+        typeof item === "string"
+          ? item
+          : item?.title
+          ? `${item.title}${item?.reason ? `: ${item.reason}` : ""}`
+          : JSON.stringify(item)
+      ),
+      generatedBy: profile?.email || auth.currentUser?.email || "VP-PHARM AI Weekly Sales Intelligence",
+    });
+  }
 
   if (!isAdmin && !isDirector) {
     return (
@@ -965,6 +1081,9 @@ export default function Dashboard({
                     setFromDate(e.target.value);
                   }}
                 />
+                <div className="small" style={{ marginTop: 6 }}>
+                  Hiển thị: <span className="kbd">{formatVNDate(fromDate)}</span>
+                </div>
               </div>
               <div>
                 <label>Đến ngày</label>
@@ -976,6 +1095,9 @@ export default function Dashboard({
                     setToDate(e.target.value);
                   }}
                 />
+                <div className="small" style={{ marginTop: 6 }}>
+                  Hiển thị: <span className="kbd">{formatVNDate(toDate)}</span>
+                </div>
               </div>
             </div>
 
@@ -983,13 +1105,13 @@ export default function Dashboard({
               <span className="pill">
                 <span className="small">Kỳ hiện tại</span>{" "}
                 <span className="kbd">
-                  {fmtDateInput(analytics.from)} → {fmtDateInput(analytics.to)}
+                  {formatVNDate(analytics.from)} → {formatVNDate(analytics.to)}
                 </span>
               </span>
               <span className="pill">
                 <span className="small">Kỳ trước</span>{" "}
                 <span className="kbd">
-                  {fmtDateInput(analytics.prevFrom)} → {fmtDateInput(analytics.prevTo)}
+                  {formatVNDate(analytics.prevFrom)} → {formatVNDate(analytics.prevTo)}
                 </span>
               </span>
               <span className="pill">
@@ -1005,7 +1127,7 @@ export default function Dashboard({
         <button
           className="btn"
           type="button"
-          onClick={exportDashboardPDF}
+          onClick={handleExportPDF}
           style={{ display: "flex", alignItems: "center", gap: 8 }}
         >
           <Download size={16} />
@@ -1016,7 +1138,7 @@ export default function Dashboard({
       <div id="ceo-brief">
         <SectionCard
           title="CEO Brief / Executive Brief"
-          subtitle="Tóm tắt điều hành nhanh từ dữ liệu báo cáo và phân tích AI"
+          subtitle={`Tóm tắt điều hành nhanh trong kỳ ${formatVNDate(analytics.from)} → ${formatVNDate(analytics.to)}`}
           icon={<BriefcaseBusiness size={18} />}
         >
           <div className="grid two" style={{ marginBottom: 14 }}>

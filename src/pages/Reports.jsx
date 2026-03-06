@@ -18,6 +18,49 @@ function formatTs(ts) {
   }
 }
 
+function formatVNDate(dateStr = "") {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function formatWeekLabel(weekCode = "") {
+  const match = String(weekCode || "").match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return "";
+  return `Tuần ${match[2]}/${match[1]}`;
+}
+
+function formatReportPeriod(item) {
+  const weekCode = item?.weekCode || item?.input?.weekCode || "";
+  const weekLabel = formatWeekLabel(weekCode);
+
+  const from = item?.weekFrom || item?.input?.weekFrom || "";
+  const to = item?.weekTo || item?.input?.weekTo || "";
+
+  const fromText = formatVNDate(from);
+  const toText = formatVNDate(to);
+
+  if (weekLabel && fromText && toText) {
+    return `${weekLabel} • ${fromText} → ${toText}`;
+  }
+
+  if (fromText && toText) {
+    return `${fromText} → ${toText}`;
+  }
+
+  if (weekLabel) {
+    return weekLabel;
+  }
+
+  return "-";
+}
+
 function formatVND(value) {
   const amount = Number(value || 0);
   return new Intl.NumberFormat("vi-VN", {
@@ -410,6 +453,7 @@ export default function Reports({
                 const created = formatTs(it.createdAt) || "unknown-time";
                 const preview =
                   safeText(it.analysis_text).slice(0, 110) || "(Chưa có analysis_text)";
+                const periodText = formatReportPeriod(it);
 
                 return (
                   <button
@@ -431,6 +475,10 @@ export default function Reports({
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                       <div style={{ fontWeight: 900, lineHeight: 1.4 }}>{title}</div>
                       <div className="small">{created}</div>
+                    </div>
+
+                    <div className="small" style={{ marginTop: 6 }}>
+                      Kỳ báo cáo: <span className="kbd">{periodText}</span>
                     </div>
 
                     <div className="small" style={{ marginTop: 6 }}>
@@ -491,16 +539,13 @@ export default function Reports({
                   />
                 </div>
 
-                <div className="small" style={{ display: "grid", gap: 6 }}>
+                <div className="small" style={{ display: "grid", gap: 8 }}>
                   <div>
                     <b>ID:</b> <span className="kbd">{selected.id}</span>
                   </div>
                   <div>
                     <b>Tuần làm việc:</b>{" "}
-                    <span className="kbd">
-                      {selected.weekFrom || selected?.input?.weekFrom || "-"} →{" "}
-                      {selected.weekTo || selected?.input?.weekTo || "-"}
-                    </span>
+                    <span className="kbd">{formatReportPeriod(selected)}</span>
                   </div>
                   <div>
                     <b>Nhân viên:</b>{" "}

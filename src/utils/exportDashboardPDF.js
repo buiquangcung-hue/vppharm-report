@@ -15,8 +15,8 @@ const formatPercent = (value) => {
 
 const formatDate = (value) => {
   if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
+  const d = value?.toDate ? value.toDate() : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value || "");
   return d.toLocaleDateString("vi-VN");
 };
 
@@ -30,6 +30,21 @@ const stripMarkdown = (text = "") => {
 };
 
 const safeArray = (arr) => (Array.isArray(arr) ? arr : []);
+
+const getTopPersonName = (item) =>
+  item?.label || item?.name || item?.employeeName || "-";
+
+const getTopAreaName = (item) =>
+  item?.label || item?.name || item?.area || item?.province || "-";
+
+const getTopValue = (item) =>
+  Number(
+    item?.value ??
+      item?.revenue ??
+      item?.sales ??
+      item?.totalSales ??
+      0
+  );
 
 export async function exportDashboardPDF({
   periodLabel = "",
@@ -93,7 +108,15 @@ export async function exportDashboardPDF({
     doc.setFontSize(fontSize);
 
     list.forEach((item) => {
-      const clean = stripMarkdown(item);
+      const clean =
+        typeof item === "string"
+          ? stripMarkdown(item)
+          : stripMarkdown(
+              item?.title
+                ? `${item.title}${item?.reason ? `: ${item.reason}` : ""}`
+                : JSON.stringify(item)
+            );
+
       const lines = doc.splitTextToSize(`• ${clean}`, contentWidth - 2);
       const blockHeight = lines.length * 5.2;
       addPageIfNeeded(blockHeight + 1);
@@ -211,14 +234,17 @@ export async function exportDashboardPDF({
   doc.setFontSize(11);
   doc.text(`Kỳ báo cáo: ${periodLabel || "Tùy chọn"}`, margin, y);
   y += 7;
+
   doc.text(
     `Từ ngày: ${formatDate(dateRange.start)}   |   Đến ngày: ${formatDate(dateRange.end)}`,
     margin,
     y
   );
   y += 7;
+
   doc.text(`Ngày xuất báo cáo: ${new Date().toLocaleString("vi-VN")}`, margin, y);
   y += 7;
+
   doc.text(`Nguồn tạo: ${generatedBy}`, margin, y);
   y += 12;
 
@@ -309,9 +335,9 @@ export async function exportDashboardPDF({
     "Top nhân viên",
     safeArray(topEmployees).slice(0, 10).map((item, index) => ({
       rank: index + 1,
-      name: item.name || item.employeeName || "-",
-      revenue: formatCurrency(item.revenue || item.sales || item.totalSales || 0),
-      visits: formatNumber(item.visits || item.totalVisits || 0),
+      name: getTopPersonName(item),
+      revenue: formatCurrency(getTopValue(item)),
+      visits: "-",
     })),
     [
       { key: "rank", label: "Hạng", width: 18 },
@@ -325,9 +351,9 @@ export async function exportDashboardPDF({
     "Top địa bàn",
     safeArray(topAreas).slice(0, 10).map((item, index) => ({
       rank: index + 1,
-      area: item.name || item.area || item.province || "-",
-      revenue: formatCurrency(item.revenue || item.sales || item.totalSales || 0),
-      reports: formatNumber(item.reports || item.totalReports || 0),
+      area: getTopAreaName(item),
+      revenue: formatCurrency(getTopValue(item)),
+      reports: "-",
     })),
     [
       { key: "rank", label: "Hạng", width: 18 },
