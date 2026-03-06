@@ -11,12 +11,21 @@ import {
 
 function formatTs(ts) {
   try {
-    const d = ts?.toDate ? ts.toDate() : null;
-    if (!d) return "";
+    const d = ts?.toDate ? ts.toDate() : ts ? new Date(ts) : null;
+    if (!d || Number.isNaN(d.getTime())) return "";
     return d.toLocaleString("vi-VN");
   } catch {
     return "";
   }
+}
+
+function formatVND(value) {
+  const amount = Number(value || 0);
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 function safeText(x) {
@@ -31,7 +40,19 @@ function toMillis(value) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-export default function Reports({ isAdmin = false }) {
+function getReportTitle(item) {
+  return (
+    item.reportDisplayName ||
+    item.reportName ||
+    item.weekKey ||
+    item?.input?.reportDisplayName ||
+    item?.input?.reportName ||
+    item?.input?.weekKey ||
+    "Báo cáo chưa đặt tên"
+  );
+}
+
+export default function Reports({ isAdmin = false, isDirector = false }) {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [error, setError] = useState("");
@@ -72,8 +93,7 @@ export default function Reports({ isAdmin = false }) {
     );
 
     return () => unsub();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, [isAdmin, isDirector, selectedId]);
 
   const selected = useMemo(
     () => items.find((x) => x.id === selectedId) || null,
@@ -88,15 +108,11 @@ export default function Reports({ isAdmin = false }) {
           <p>
             {isAdmin
               ? "Admin: xem tất cả báo cáo (50 bản ghi gần nhất)"
-              : "Chỉ báo cáo của bạn (50 bản ghi gần nhất)"}
+              : "Bạn chỉ xem được các báo cáo do mình tạo"}
           </p>
         </div>
         <div className="card-body">
-          {error ? (
-            <div className="small">
-              {error}
-            </div>
-          ) : null}
+          {error ? <div className="small">{error}</div> : null}
 
           <div className="row" style={{ marginTop: 8 }}>
             <span className="pill">
@@ -105,7 +121,7 @@ export default function Reports({ isAdmin = false }) {
             </span>
             <span className="pill">
               <span className="small">Quyền</span>{" "}
-              <span className="kbd">{isAdmin ? "admin" : "user"}</span>
+              <span className="kbd">{isAdmin ? "admin" : isDirector ? "director" : "user"}</span>
             </span>
           </div>
         </div>
@@ -132,10 +148,10 @@ export default function Reports({ isAdmin = false }) {
             ) : (
               items.map((it) => {
                 const active = it.id === selectedId;
-                const weekKey = it.weekKey || it?.input?.weekKey || "unknown-week";
+                const title = getReportTitle(it);
                 const created = formatTs(it.createdAt) || "unknown-time";
                 const preview =
-                  safeText(it.analysis_text).slice(0, 90) || "(Chưa có analysis_text)";
+                  safeText(it.analysis_text).slice(0, 100) || "(Chưa có analysis_text)";
 
                 return (
                   <button
@@ -155,8 +171,16 @@ export default function Reports({ isAdmin = false }) {
                     title={it.id}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                      <div style={{ fontWeight: 900 }}>{weekKey}</div>
+                      <div style={{ fontWeight: 900 }}>{title}</div>
                       <div className="small">{created}</div>
+                    </div>
+
+                    <div className="small" style={{ marginTop: 6 }}>
+                      Nhân viên: <span className="kbd">{it.employeeName || it?.input?.employee?.name || "-"}</span>
+                    </div>
+
+                    <div className="small" style={{ marginTop: 6 }}>
+                      Địa bàn: <span className="kbd">{it.province || it?.input?.province || "-"}</span>
                     </div>
 
                     {isAdmin ? (
@@ -178,28 +202,41 @@ export default function Reports({ isAdmin = false }) {
         <div className="card">
           <div className="card-header">
             <h2>Chi tiết</h2>
-            <p>Input + kết quả AI</p>
+            <p>Thông tin chuyến đi + kết quả AI</p>
           </div>
           <div className="card-body" style={{ display: "grid", gap: 12 }}>
             {!selected ? (
               <div className="small">Chọn 1 báo cáo ở danh sách bên trái.</div>
             ) : (
               <>
-                <div className="small">
+                <div className="small" style={{ display: "grid", gap: 6 }}>
                   <div>
                     <b>ID:</b> <span className="kbd">{selected.id}</span>
                   </div>
                   <div>
-                    <b>Tuần:</b>{" "}
+                    <b>Tên báo cáo:</b>{" "}
+                    <span className="kbd">{getReportTitle(selected)}</span>
+                  </div>
+                  <div>
+                    <b>Tuần làm việc:</b>{" "}
                     <span className="kbd">
-                      {selected.weekKey || selected?.input?.weekKey || "unknown"}
+                      {selected.weekFrom || selected?.input?.weekFrom || "-"} →{" "}
+                      {selected.weekTo || selected?.input?.weekTo || "-"}
                     </span>
                   </div>
                   <div>
-                    <b>Tạo lúc:</b>{" "}
+                    <b>Nhân viên:</b>{" "}
                     <span className="kbd">
-                      {formatTs(selected.createdAt) || "unknown"}
+                      {selected.employeeName || selected?.input?.employee?.name || "-"}
                     </span>
+                  </div>
+                  <div>
+                    <b>Địa bàn:</b>{" "}
+                    <span className="kbd">{selected.province || selected?.input?.province || "-"}</span>
+                  </div>
+                  <div>
+                    <b>Tạo lúc:</b>{" "}
+                    <span className="kbd">{formatTs(selected.createdAt) || "unknown"}</span>
                   </div>
 
                   {isAdmin ? (
@@ -213,22 +250,128 @@ export default function Reports({ isAdmin = false }) {
 
                 <div className="hr" />
 
+                <div className="grid two">
+                  <InfoBox
+                    title="Số khách hàng đến viếng thăm"
+                    value={selected.visitCustomerCount ?? selected?.input?.visitCustomerCount ?? 0}
+                  />
+                  <InfoBox
+                    title="Doanh số cả chuyến đi"
+                    value={formatVND(selected.tripRevenue ?? selected?.input?.tripRevenue ?? 0)}
+                  />
+                </div>
+
+                <div className="grid two">
+                  <InfoBox
+                    title="Tổng KH TDV phụ trách"
+                    value={selected.assignedCustomerCount ?? selected?.input?.assignedCustomerCount ?? 0}
+                  />
+                  <InfoBox
+                    title="KH chưa khai thác"
+                    value={selected.unexploredCustomerCount ?? selected?.input?.unexploredCustomerCount ?? 0}
+                  />
+                </div>
+
+                <InfoBox
+                  title="Tổng KH toàn địa bàn"
+                  value={selected.totalMarketCustomerCount ?? selected?.input?.totalMarketCustomerCount ?? 0}
+                />
+
                 <div>
                   <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                    Báo cáo gốc (Input)
+                    Điểm mạnh của nhân viên
                   </div>
-                  <pre
+                  <div
                     style={{
-                      margin: 0,
+                      whiteSpace: "pre-wrap",
                       padding: 12,
                       background: "rgba(255,255,255,.06)",
                       borderRadius: 14,
-                      overflow: "auto",
                       border: "1px solid rgba(255,255,255,.10)",
                     }}
                   >
-{JSON.stringify(selected.input || {}, null, 2)}
-                  </pre>
+                    {selected.employeeStrengths || selected?.input?.employeeStrengths || "-"}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                    Điểm yếu của nhân viên
+                  </div>
+                  <div
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      padding: 12,
+                      background: "rgba(255,255,255,.06)",
+                      borderRadius: 14,
+                      border: "1px solid rgba(255,255,255,.10)",
+                    }}
+                  >
+                    {selected.employeeWeaknesses || selected?.input?.employeeWeaknesses || "-"}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                    Doanh số mặt hàng
+                  </div>
+                  {(selected.productLines || selected?.input?.productLines || []).length === 0 ? (
+                    <div className="small">Không có dữ liệu mặt hàng.</div>
+                  ) : (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {(selected.productLines || selected?.input?.productLines || []).map((item, index) => (
+                        <div
+                          key={`${item.productId || item.productName || "p"}-${index}`}
+                          style={{
+                            padding: 12,
+                            background: "rgba(255,255,255,.06)",
+                            borderRadius: 14,
+                            border: "1px solid rgba(255,255,255,.10)",
+                          }}
+                        >
+                          <div style={{ fontWeight: 800 }}>{item.productName || "-"}</div>
+                          <div className="small" style={{ marginTop: 6 }}>
+                            ĐVT: <span className="kbd">{item.unit || "-"}</span>
+                          </div>
+                          <div className="small" style={{ marginTop: 4 }}>
+                            Giá bán: <span className="kbd">{formatVND(item.price || 0)}</span>
+                          </div>
+                          <div className="small" style={{ marginTop: 4 }}>
+                            Số lượng: <span className="kbd">{item.quantity || 0}</span>
+                          </div>
+                          <div className="small" style={{ marginTop: 4 }}>
+                            Doanh số dự kiến:{" "}
+                            <span className="kbd">{formatVND(item.expectedRevenue || 0)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="pill" style={{ marginTop: 12 }}>
+                    <span className="small">Tổng doanh số dự kiến:</span>{" "}
+                    <span className="kbd">
+                      {formatVND(selected.totalExpectedRevenue ?? selected?.input?.totalExpectedRevenue ?? 0)}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                    File Excel đính kèm
+                  </div>
+                  {selected?.excelFile?.fileUrl ? (
+                    <a
+                      className="btn secondary"
+                      href={selected.excelFile.fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Mở file: {selected.excelFile.fileName || "Excel"}
+                    </a>
+                  ) : (
+                    <div className="small">Không có file Excel đính kèm.</div>
+                  )}
                 </div>
 
                 <div>
@@ -247,6 +390,24 @@ export default function Reports({ isAdmin = false }) {
                   >
                     {selected.analysis_text || "(Chưa có analysis_text)"}
                   </div>
+                </div>
+
+                <div>
+                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                    Payload đã lưu
+                  </div>
+                  <pre
+                    style={{
+                      margin: 0,
+                      padding: 12,
+                      background: "rgba(255,255,255,.06)",
+                      borderRadius: 14,
+                      overflow: "auto",
+                      border: "1px solid rgba(255,255,255,.10)",
+                    }}
+                  >
+{JSON.stringify(selected.input || {}, null, 2)}
+                  </pre>
                 </div>
 
                 {selected.analysis_json ? (
@@ -273,6 +434,24 @@ export default function Reports({ isAdmin = false }) {
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoBox({ title, value }) {
+  return (
+    <div
+      style={{
+        padding: 12,
+        background: "rgba(255,255,255,.06)",
+        borderRadius: 14,
+        border: "1px solid rgba(255,255,255,.10)",
+      }}
+    >
+      <div style={{ fontWeight: 800 }}>{title}</div>
+      <div className="small" style={{ marginTop: 8 }}>
+        <span className="kbd">{String(value ?? "-")}</span>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Weekly from "./pages/Weekly.jsx";
 import Reports from "./pages/Reports.jsx";
 import Admin from "./pages/Admin.jsx";
@@ -15,18 +15,26 @@ const LOGO_URL =
 const ADMIN_EMAIL = "buiquangcung@gmail.com";
 const ADMIN_PHONE = "0946 429 099";
 
+function normalizeRole(profile, email) {
+  if ((email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase()) return "admin";
+  return profile?.role || "pending";
+}
+
 export default function App() {
   const [tab, setTab] = useState("weekly");
   const [authOpen, setAuthOpen] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [userEmail, setUserEmail] = useState("Chưa đăng nhập");
+  const [profile, setProfile] = useState(null);
 
   const [ready, setReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+
   const [approval, setApproval] = useState({
     approved: false,
     blocked: false,
     role: "pending",
+    status: "pending",
   });
 
   const [notice, setNotice] = useState({
@@ -48,6 +56,18 @@ export default function App() {
   function closeNotice() {
     setNotice((prev) => ({ ...prev, open: false }));
   }
+
+  const role = approval.role || "pending";
+  const isDirector = role === "director";
+  const canUseApp = authed && (isAdmin || approval.approved);
+
+  const roleLabel = useMemo(() => {
+    if (isAdmin) return "Admin";
+    if (role === "director") return "Giám đốc kinh doanh";
+    if (role === "user") return "Nhân viên";
+    if (role === "pending") return "Chờ duyệt";
+    return role || "Không xác định";
+  }, [isAdmin, role]);
 
   function goTab(nextTab) {
     if (!authed) {
@@ -72,7 +92,13 @@ export default function App() {
           setAuthed(false);
           setUserEmail("Chưa đăng nhập");
           setIsAdmin(false);
-          setApproval({ approved: false, blocked: false, role: "pending" });
+          setProfile(null);
+          setApproval({
+            approved: false,
+            blocked: false,
+            role: "pending",
+            status: "pending",
+          });
           setTab("weekly");
           setAuthOpen(true);
           setReady(true);
@@ -88,21 +114,41 @@ export default function App() {
         if (!snap.exists()) {
           await setDoc(ref, {
             email: u.email || null,
+            name: "",
+            department: "",
+            phone: "",
             role: "pending",
             status: "pending",
             approved: false,
             blocked: false,
+            managerUid: "",
+            managerName: "",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
         }
 
         const snap2 = await getDoc(ref);
-        const profile = snap2.data() || {};
+        const rawProfile = snap2.data() || {};
 
         if ((u.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+          const adminProfile = {
+            ...rawProfile,
+            email: u.email || null,
+            role: "admin",
+            status: "active",
+            approved: true,
+            blocked: false,
+          };
+
           setIsAdmin(true);
-          setApproval({ approved: true, blocked: false, role: "admin" });
+          setProfile(adminProfile);
+          setApproval({
+            approved: true,
+            blocked: false,
+            role: "admin",
+            status: "active",
+          });
 
           await setDoc(
             ref,
@@ -124,14 +170,28 @@ export default function App() {
           return;
         }
 
-        const approved = !!profile.approved;
-        const blocked = !!profile.blocked;
+        const approved = !!rawProfile.approved;
+        const blocked = !!rawProfile.blocked;
+        const normalizedRole = normalizeRole(rawProfile, u.email || "");
+        const normalizedStatus =
+          rawProfile.status || (approved ? "active" : "pending");
+
+        const nextProfile = {
+          ...rawProfile,
+          email: rawProfile.email || u.email || null,
+          role: normalizedRole,
+          status: normalizedStatus,
+          approved,
+          blocked,
+        };
 
         setIsAdmin(false);
+        setProfile(nextProfile);
         setApproval({
           approved,
           blocked,
-          role: profile.role || (approved ? "user" : "pending"),
+          role: normalizedRole,
+          status: normalizedStatus,
         });
 
         if (blocked) {
@@ -162,7 +222,6 @@ export default function App() {
           return;
         }
 
-        // User thường đăng nhập thành công -> luôn vào Weekly
         setTab("weekly");
         setAuthOpen(false);
         setReady(true);
@@ -195,8 +254,6 @@ export default function App() {
     );
   }
 
-  const showApp = authed && (isAdmin || approval.approved);
-
   return (
     <div>
       <header>
@@ -215,18 +272,35 @@ export default function App() {
               <span className="kbd">{userEmail}</span>
             </div>
 
-            {showApp ? (
+            {canUseApp ? (
               <>
-                <button className="btn secondary" type="button" onClick={() => goTab("weekly")}>
+                <div className="pill">
+                  <span className="small">Vai trò:</span>{" "}
+                  <span className="kbd">{roleLabel}</span>
+                </div>
+
+                <button
+                  className="btn secondary"
+                  type="button"
+                  onClick={() => goTab("weekly")}
+                >
                   Weekly
                 </button>
 
-                <button className="btn secondary" type="button" onClick={() => goTab("reports")}>
+                <button
+                  className="btn secondary"
+                  type="button"
+                  onClick={() => goTab("reports")}
+                >
                   Reports
                 </button>
 
                 {isAdmin ? (
-                  <button className="btn secondary" type="button" onClick={() => goTab("admin")}>
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={() => goTab("admin")}
+                  >
                     Admin
                   </button>
                 ) : null}
@@ -245,7 +319,7 @@ export default function App() {
       </header>
 
       <div className="container">
-        {!showApp ? (
+        {!canUseApp ? (
           <div className="card">
             <div className="card-body">
               <h2 style={{ marginTop: 0 }}>Chưa có quyền truy cập</h2>
@@ -264,20 +338,42 @@ export default function App() {
               </div>
             </div>
           </div>
+        ) : tab === "weekly" ? (
+          <Weekly
+            profile={profile}
+            isAdmin={isAdmin}
+            isDirector={isDirector}
+            onNotify={(title, message, type) => showNotice(title, message, type)}
+          />
         ) : tab === "reports" ? (
-          <Reports isAdmin={isAdmin} />
+          <Reports
+            profile={profile}
+            isAdmin={isAdmin}
+            isDirector={isDirector}
+          />
         ) : tab === "admin" ? (
           isAdmin ? (
             <Admin
               adminEmail={ADMIN_EMAIL}
               isAdmin={isAdmin}
+              profile={profile}
               onNotify={(title, message, type) => showNotice(title, message, type)}
             />
           ) : (
-            <Weekly />
+            <Weekly
+              profile={profile}
+              isAdmin={isAdmin}
+              isDirector={isDirector}
+              onNotify={(title, message, type) => showNotice(title, message, type)}
+            />
           )
         ) : (
-          <Weekly />
+          <Weekly
+            profile={profile}
+            isAdmin={isAdmin}
+            isDirector={isDirector}
+            onNotify={(title, message, type) => showNotice(title, message, type)}
+          />
         )}
       </div>
 
