@@ -78,6 +78,137 @@ function matchesManagerFallback(employee, profile, currentUser) {
   return false;
 }
 
+function normalizeArrayContent(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data.filter(Boolean);
+  if (typeof data === "string") return [data];
+  if (typeof data === "object") return [data];
+  return [];
+}
+
+function renderInsightItem(item, index) {
+  if (typeof item === "string") {
+    return (
+      <div
+        key={index}
+        style={{
+          padding: 12,
+          borderRadius: 12,
+          background: "rgba(255,255,255,.05)",
+          border: "1px solid rgba(255,255,255,.08)",
+          lineHeight: 1.55,
+        }}
+      >
+        {item}
+      </div>
+    );
+  }
+
+  if (item && typeof item === "object") {
+    const title = item.title || item.name || item.staff || item.label || `Mục ${index + 1}`;
+    const desc =
+      item.reason ||
+      item.rationale ||
+      item.focus ||
+      item.owner ||
+      item.suggested_action ||
+      item.description ||
+      item.summary ||
+      "";
+
+    return (
+      <div
+        key={index}
+        style={{
+          padding: 12,
+          borderRadius: 12,
+          background: "rgba(255,255,255,.05)",
+          border: "1px solid rgba(255,255,255,.08)",
+        }}
+      >
+        <div style={{ fontWeight: 800 }}>{title}</div>
+        {desc ? (
+          <div className="small" style={{ marginTop: 6, lineHeight: 1.5 }}>
+            {desc}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function AnalysisSection({ title, data }) {
+  const items = normalizeArrayContent(data);
+  if (!items.length) return null;
+
+  return (
+    <div
+      style={{
+        padding: 16,
+        borderRadius: 18,
+        background: "rgba(255,255,255,.05)",
+        border: "1px solid rgba(255,255,255,.10)",
+      }}
+    >
+      <div
+        style={{
+          fontWeight: 900,
+          fontSize: 15,
+          letterSpacing: 0.4,
+          textTransform: "uppercase",
+          marginBottom: 10,
+        }}
+      >
+        {title}
+      </div>
+      <div style={{ display: "grid", gap: 10 }}>
+        {items.map((item, index) => renderInsightItem(item, index))}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ title, value, sub }) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: "rgba(255,255,255,.06)",
+        borderRadius: 16,
+        border: "1px solid rgba(255,255,255,.10)",
+      }}
+    >
+      <div className="small">{title}</div>
+      <div style={{ fontWeight: 900, fontSize: 18, marginTop: 8 }}>{value}</div>
+      {sub ? (
+        <div className="small" style={{ marginTop: 6 }}>
+          {sub}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function InfoBox({ title, value }) {
+  return (
+    <div
+      style={{
+        padding: 12,
+        background: "rgba(255,255,255,.06)",
+        borderRadius: 14,
+        border: "1px solid rgba(255,255,255,.10)",
+      }}
+    >
+      <div style={{ fontWeight: 800 }}>{title}</div>
+      <div className="small" style={{ marginTop: 8 }}>
+        <span className="kbd">{String(value ?? "-")}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function Reports({
   isAdmin = false,
   isDirector = false,
@@ -202,11 +333,18 @@ export default function Reports({
     [items, selectedId]
   );
 
+  const selectedProductLines =
+    selected?.productLines || selected?.input?.productLines || [];
+
+  const selectedAnalysisJson = selected?.analysis_json || null;
+
   return (
     <div className="grid" style={{ gap: 14 }}>
       <div className="card">
-        <div className="card-header">
-          <h2>Lịch sử báo cáo</h2>
+        <div className="card-header" style={{ textAlign: "center" }}>
+          <h2 style={{ letterSpacing: 0.6, textTransform: "uppercase" }}>
+            LỊCH SỬ BÁO CÁO THỊ TRƯỜNG
+          </h2>
           <p>
             {isAdmin
               ? "Admin: xem tất cả báo cáo gần nhất trong hệ thống"
@@ -216,19 +354,33 @@ export default function Reports({
           </p>
         </div>
         <div className="card-body">
-          {error ? <div className="small">{error}</div> : null}
+          {error ? (
+            <div
+              style={{
+                marginBottom: 14,
+                padding: 12,
+                borderRadius: 14,
+                border: "1px solid rgba(239,68,68,.35)",
+                background: "rgba(239,68,68,.10)",
+              }}
+            >
+              <div className="small" style={{ color: "#ffd5d5" }}>
+                {error}
+              </div>
+            </div>
+          ) : null}
 
-          <div className="row" style={{ marginTop: 8 }}>
-            <span className="pill">
-              <span className="small">Tổng</span>{" "}
-              <span className="kbd">{items.length}</span>
-            </span>
-            <span className="pill">
-              <span className="small">Quyền</span>{" "}
-              <span className="kbd">
-                {isAdmin ? "admin" : isDirector ? "director" : "user"}
-              </span>
-            </span>
+          <div className="grid two">
+            <StatCard
+              title="Tổng báo cáo hiển thị"
+              value={items.length}
+              sub="Danh sách đã lọc theo quyền hiện tại"
+            />
+            <StatCard
+              title="Quyền đang dùng"
+              value={isAdmin ? "Admin" : isDirector ? "Director" : "User"}
+              sub="Phân quyền đọc báo cáo của hệ thống"
+            />
           </div>
         </div>
       </div>
@@ -242,8 +394,8 @@ export default function Reports({
       >
         <div className="card">
           <div className="card-header">
-            <h2>Danh sách</h2>
-            <p>Click để xem chi tiết</p>
+            <h2>Danh sách báo cáo</h2>
+            <p>Chọn một báo cáo để xem chi tiết</p>
           </div>
           <div
             className="card-body"
@@ -257,7 +409,7 @@ export default function Reports({
                 const title = getReportTitle(it);
                 const created = formatTs(it.createdAt) || "unknown-time";
                 const preview =
-                  safeText(it.analysis_text).slice(0, 100) || "(Chưa có analysis_text)";
+                  safeText(it.analysis_text).slice(0, 110) || "(Chưa có analysis_text)";
 
                 return (
                   <button
@@ -277,7 +429,7 @@ export default function Reports({
                     title={it.id}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                      <div style={{ fontWeight: 900 }}>{title}</div>
+                      <div style={{ fontWeight: 900, lineHeight: 1.4 }}>{title}</div>
                       <div className="small">{created}</div>
                     </div>
 
@@ -290,9 +442,7 @@ export default function Reports({
 
                     <div className="small" style={{ marginTop: 6 }}>
                       Địa bàn:{" "}
-                      <span className="kbd">
-                        {it.province || it?.input?.province || "-"}
-                      </span>
+                      <span className="kbd">{it.province || it?.input?.province || "-"}</span>
                     </div>
 
                     {isAdmin ? (
@@ -301,7 +451,7 @@ export default function Reports({
                       </div>
                     ) : null}
 
-                    <div className="small" style={{ marginTop: 6, lineHeight: 1.35 }}>
+                    <div className="small" style={{ marginTop: 8, lineHeight: 1.45 }}>
                       {preview}
                     </div>
                   </button>
@@ -312,22 +462,38 @@ export default function Reports({
         </div>
 
         <div className="card">
-          <div className="card-header">
-            <h2>Chi tiết</h2>
-            <p>Thông tin chuyến đi + kết quả AI</p>
+          <div className="card-header" style={{ textAlign: "center" }}>
+            <h2 style={{ textTransform: "uppercase", letterSpacing: 0.6 }}>
+              CHI TIẾT BÁO CÁO & PHÂN TÍCH AI
+            </h2>
+            <p>Thông tin chuyến đi, dữ liệu kinh doanh và kết quả phân tích</p>
           </div>
-          <div className="card-body" style={{ display: "grid", gap: 12 }}>
+
+          <div className="card-body" style={{ display: "grid", gap: 14 }}>
             {!selected ? (
               <div className="small">Chọn 1 báo cáo ở danh sách bên trái.</div>
             ) : (
               <>
+                <div className="grid two">
+                  <StatCard
+                    title="Tên báo cáo"
+                    value={getReportTitle(selected)}
+                    sub={`Tạo lúc: ${formatTs(selected.createdAt) || "unknown"}`}
+                  />
+                  <StatCard
+                    title="Doanh số dự kiến"
+                    value={formatVND(
+                      selected.totalExpectedRevenue ??
+                        selected?.input?.totalExpectedRevenue ??
+                        0
+                    )}
+                    sub="Tổng từ toàn bộ mặt hàng đã nhập"
+                  />
+                </div>
+
                 <div className="small" style={{ display: "grid", gap: 6 }}>
                   <div>
                     <b>ID:</b> <span className="kbd">{selected.id}</span>
-                  </div>
-                  <div>
-                    <b>Tên báo cáo:</b>{" "}
-                    <span className="kbd">{getReportTitle(selected)}</span>
                   </div>
                   <div>
                     <b>Tuần làm việc:</b>{" "}
@@ -347,10 +513,6 @@ export default function Reports({
                     <span className="kbd">
                       {selected.province || selected?.input?.province || "-"}
                     </span>
-                  </div>
-                  <div>
-                    <b>Tạo lúc:</b>{" "}
-                    <span className="kbd">{formatTs(selected.createdAt) || "unknown"}</span>
                   </div>
 
                   {isAdmin ? (
@@ -409,96 +571,83 @@ export default function Reports({
                   }
                 />
 
-                <div>
-                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                    Điểm mạnh của nhân viên
-                  </div>
+                <div className="grid two">
                   <div
                     style={{
-                      whiteSpace: "pre-wrap",
-                      padding: 12,
+                      padding: 14,
                       background: "rgba(255,255,255,.06)",
                       borderRadius: 14,
                       border: "1px solid rgba(255,255,255,.10)",
                     }}
                   >
-                    {selected.employeeStrengths ||
-                      selected?.input?.employeeStrengths ||
-                      "-"}
+                    <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                      Điểm mạnh của nhân viên
+                    </div>
+                    <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                      {selected.employeeStrengths ||
+                        selected?.input?.employeeStrengths ||
+                        "-"}
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                    Điểm yếu của nhân viên
-                  </div>
                   <div
                     style={{
-                      whiteSpace: "pre-wrap",
-                      padding: 12,
+                      padding: 14,
                       background: "rgba(255,255,255,.06)",
                       borderRadius: 14,
                       border: "1px solid rgba(255,255,255,.10)",
                     }}
                   >
-                    {selected.employeeWeaknesses ||
-                      selected?.input?.employeeWeaknesses ||
-                      "-"}
+                    <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                      Điểm yếu của nhân viên
+                    </div>
+                    <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                      {selected.employeeWeaknesses ||
+                        selected?.input?.employeeWeaknesses ||
+                        "-"}
+                    </div>
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                    Doanh số mặt hàng
+                  <div style={{ fontWeight: 900, marginBottom: 10 }}>
+                    Cơ cấu doanh số mặt hàng
                   </div>
-                  {(selected.productLines || selected?.input?.productLines || []).length === 0 ? (
+
+                  {selectedProductLines.length === 0 ? (
                     <div className="small">Không có dữ liệu mặt hàng.</div>
                   ) : (
                     <div style={{ display: "grid", gap: 10 }}>
-                      {(selected.productLines || selected?.input?.productLines || []).map(
-                        (item, index) => (
-                          <div
-                            key={`${item.productId || item.productName || "p"}-${index}`}
-                            style={{
-                              padding: 12,
-                              background: "rgba(255,255,255,.06)",
-                              borderRadius: 14,
-                              border: "1px solid rgba(255,255,255,.10)",
-                            }}
-                          >
-                            <div style={{ fontWeight: 800 }}>{item.productName || "-"}</div>
-                            <div className="small" style={{ marginTop: 6 }}>
-                              ĐVT: <span className="kbd">{item.unit || "-"}</span>
-                            </div>
-                            <div className="small" style={{ marginTop: 4 }}>
-                              Giá bán:{" "}
-                              <span className="kbd">{formatVND(item.price || 0)}</span>
-                            </div>
-                            <div className="small" style={{ marginTop: 4 }}>
-                              Số lượng: <span className="kbd">{item.quantity || 0}</span>
-                            </div>
-                            <div className="small" style={{ marginTop: 4 }}>
-                              Doanh số dự kiến:{" "}
-                              <span className="kbd">
-                                {formatVND(item.expectedRevenue || 0)}
-                              </span>
-                            </div>
+                      {selectedProductLines.map((item, index) => (
+                        <div
+                          key={`${item.productId || item.productName || "p"}-${index}`}
+                          style={{
+                            padding: 12,
+                            background: "rgba(255,255,255,.06)",
+                            borderRadius: 14,
+                            border: "1px solid rgba(255,255,255,.10)",
+                          }}
+                        >
+                          <div style={{ fontWeight: 800 }}>{item.productName || "-"}</div>
+                          <div className="small" style={{ marginTop: 6 }}>
+                            ĐVT: <span className="kbd">{item.unit || "-"}</span>
                           </div>
-                        )
-                      )}
+                          <div className="small" style={{ marginTop: 4 }}>
+                            Giá bán: <span className="kbd">{formatVND(item.price || 0)}</span>
+                          </div>
+                          <div className="small" style={{ marginTop: 4 }}>
+                            Số lượng: <span className="kbd">{item.quantity || 0}</span>
+                          </div>
+                          <div className="small" style={{ marginTop: 4 }}>
+                            Doanh số dự kiến:{" "}
+                            <span className="kbd">
+                              {formatVND(item.expectedRevenue || 0)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
-
-                  <div className="pill" style={{ marginTop: 12 }}>
-                    <span className="small">Tổng doanh số dự kiến:</span>{" "}
-                    <span className="kbd">
-                      {formatVND(
-                        selected.totalExpectedRevenue ??
-                          selected?.input?.totalExpectedRevenue ??
-                          0
-                      )}
-                    </span>
-                  </div>
                 </div>
 
                 <div>
@@ -519,31 +668,138 @@ export default function Reports({
                   )}
                 </div>
 
-                <div>
-                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                    Kết quả AI (Text)
+                <div className="hr" />
+
+                <div className="card" style={{ boxShadow: "none" }}>
+                  <div className="card-header" style={{ textAlign: "center" }}>
+                    <h2 style={{ textTransform: "uppercase", letterSpacing: 0.6 }}>
+                      KẾT QUẢ PHÂN TÍCH BÁO CÁO BẰNG AI
+                    </h2>
+                    <p>Tổng hợp điều hành từ dữ liệu báo cáo tuần và file Excel</p>
                   </div>
-                  <div
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      padding: 12,
-                      background: "rgba(255,255,255,.06)",
-                      borderRadius: 14,
-                      border: "1px solid rgba(255,255,255,.10)",
-                      minHeight: 160,
-                    }}
-                  >
-                    {selected.analysis_text || "(Chưa có analysis_text)"}
+
+                  <div className="card-body">
+                    {selectedAnalysisJson ? (
+                      <div style={{ display: "grid", gap: 14 }}>
+                        <div className="grid two">
+                          <AnalysisSection
+                            title="Tóm tắt chuyến đi"
+                            data={
+                              selectedAnalysisJson.tripSummary ||
+                              selectedAnalysisJson.executive_summary
+                            }
+                          />
+                          <AnalysisSection
+                            title="Đánh giá nhân viên"
+                            data={
+                              selectedAnalysisJson.employeeAssessment ||
+                              selectedAnalysisJson.employeePerformance
+                            }
+                          />
+                        </div>
+
+                        <div className="grid two">
+                          <AnalysisSection
+                            title="Đánh giá độ phủ thị trường"
+                            data={
+                              selectedAnalysisJson.coverageAssessment ||
+                              selectedAnalysisJson.marketCoverage
+                            }
+                          />
+                          <AnalysisSection
+                            title="Đánh giá doanh số"
+                            data={
+                              selectedAnalysisJson.salesAssessment ||
+                              selectedAnalysisJson.salesPotential
+                            }
+                          />
+                        </div>
+
+                        <div className="grid two">
+                          <AnalysisSection
+                            title="Điểm mạnh nổi bật"
+                            data={selectedAnalysisJson.strengthHighlights}
+                          />
+                          <AnalysisSection
+                            title="Điểm yếu cần cải thiện"
+                            data={selectedAnalysisJson.weaknessHighlights}
+                          />
+                        </div>
+
+                        <div className="grid two">
+                          <AnalysisSection
+                            title="Rủi ro"
+                            data={selectedAnalysisJson.risks}
+                          />
+                          <AnalysisSection
+                            title="Cơ hội"
+                            data={selectedAnalysisJson.opportunities}
+                          />
+                        </div>
+
+                        <div className="grid two">
+                          <AnalysisSection
+                            title="Khuyến nghị quản lý"
+                            data={
+                              selectedAnalysisJson.managerRecommendations ||
+                              selectedAnalysisJson.managerRecommendation
+                            }
+                          />
+                          <AnalysisSection
+                            title="Kế hoạch tuần tới"
+                            data={
+                              selectedAnalysisJson.nextWeekActions ||
+                              selectedAnalysisJson.action_plan
+                            }
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          padding: 16,
+                          background: "rgba(255,255,255,.06)",
+                          borderRadius: 16,
+                          border: "1px solid rgba(255,255,255,.10)",
+                          minHeight: 160,
+                          lineHeight: 1.7,
+                        }}
+                      >
+                        {selected.analysis_text || "(Chưa có analysis_text)"}
+                      </div>
+                    )}
+
+                    {selected.analysis_json ? (
+                      <details style={{ marginTop: 14 }}>
+                        <summary style={{ cursor: "pointer", fontWeight: 900 }}>
+                          Xem JSON cấu trúc
+                        </summary>
+                        <pre
+                          style={{
+                            marginTop: 10,
+                            padding: 12,
+                            background: "rgba(0,0,0,.25)",
+                            borderRadius: 14,
+                            overflow: "auto",
+                            border: "1px solid rgba(255,255,255,.10)",
+                            color: "#d6e2ff",
+                          }}
+                        >
+{JSON.stringify(selected.analysis_json, null, 2)}
+                        </pre>
+                      </details>
+                    ) : null}
                   </div>
                 </div>
 
-                <div>
-                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                    Payload đã lưu
-                  </div>
+                <details>
+                  <summary style={{ cursor: "pointer", fontWeight: 900 }}>
+                    Xem payload đã lưu
+                  </summary>
                   <pre
                     style={{
-                      margin: 0,
+                      marginTop: 10,
                       padding: 12,
                       background: "rgba(255,255,255,.06)",
                       borderRadius: 14,
@@ -553,50 +809,11 @@ export default function Reports({
                   >
 {JSON.stringify(selected.input || {}, null, 2)}
                   </pre>
-                </div>
-
-                {selected.analysis_json ? (
-                  <details>
-                    <summary style={{ cursor: "pointer", fontWeight: 900 }}>
-                      Xem JSON cấu trúc
-                    </summary>
-                    <pre
-                      style={{
-                        marginTop: 10,
-                        padding: 12,
-                        background: "rgba(0,0,0,.25)",
-                        borderRadius: 14,
-                        overflow: "auto",
-                        border: "1px solid rgba(255,255,255,.10)",
-                        color: "#d6e2ff",
-                      }}
-                    >
-{JSON.stringify(selected.analysis_json, null, 2)}
-                    </pre>
-                  </details>
-                ) : null}
+                </details>
               </>
             )}
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function InfoBox({ title, value }) {
-  return (
-    <div
-      style={{
-        padding: 12,
-        background: "rgba(255,255,255,.06)",
-        borderRadius: 14,
-        border: "1px solid rgba(255,255,255,.10)",
-      }}
-    >
-      <div style={{ fontWeight: 800 }}>{title}</div>
-      <div className="small" style={{ marginTop: 8 }}>
-        <span className="kbd">{String(value ?? "-")}</span>
       </div>
     </div>
   );
