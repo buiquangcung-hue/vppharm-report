@@ -203,12 +203,11 @@ export default function App() {
           <div className="small">
             <b>CÔNG TY CỔ PHẦN DƯỢC VP-PHARM</b>
             <br />
-            Địa chỉ: Lô B1.4-LK12 - KĐT Thanh Hà, Xã Bình Minh, TP Hà Nội
+            Địa chỉ: Lô B1.4-LK12 - KĐT Thanh Hà, Xã Bình Minh, TP Hà Nội, Việt Nam
             <br />
             Điện thoại: 0975 498 284
             <br />
-            <span style={{ opacity: 0.85 }}>Công nghệ giúp điều hành bán hàng hiệu quả hơn với AI.</span>
-          </div>
+            </div>
         </div>
       </footer>
     </div>

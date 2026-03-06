@@ -59,6 +59,7 @@ export default function Admin({ adminEmail }) {
     await updateDoc(doc(db, "users", u.id), {
       approved: true,
       blocked: false,
+      status: "active",
       role: u.email === adminEmail ? "admin" : "user",
       approvedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -69,6 +70,7 @@ export default function Admin({ adminEmail }) {
     await updateDoc(doc(db, "users", u.id), {
       approved: false,
       blocked: true,
+      status: "blocked",
       role: "blocked",
       blockedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -79,27 +81,39 @@ export default function Admin({ adminEmail }) {
     await updateDoc(doc(db, "users", u.id), {
       approved: false,
       blocked: false,
+      status: "pending",
       role: "pending",
       updatedAt: serverTimestamp(),
     });
   }
 
-  const Row = ({ u, actions }) => (
+  const UserCard = ({ u, actions }) => (
     <div className="card" style={{ boxShadow: "none" }}>
       <div className="card-body">
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontWeight: 900 }}>{u.email || "(no email)"}</div>
-            <div className="small">
-              uid: <span className="kbd">{u.id}</span>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 900, fontSize: 16 }}>
+              {u.name || "(Chưa có tên)"}
+            </div>
+            <div className="small" style={{ marginTop: 6 }}>
+              Email: <span className="kbd">{u.email || ""}</span>
+            </div>
+            <div className="small" style={{ marginTop: 4 }}>
+              Bộ phận: <span className="kbd">{u.department || ""}</span>
+            </div>
+            <div className="small" style={{ marginTop: 4 }}>
+              Số điện thoại: <span className="kbd">{u.phone || ""}</span>
+            </div>
+            <div className="small" style={{ marginTop: 4 }}>
+              UID: <span className="kbd">{u.id}</span>
+            </div>
+            <div className="small" style={{ marginTop: 8 }}>
+              role: <span className="kbd">{u.role || "pending"}</span> · status:{" "}
+              <span className="kbd">{u.status || ""}</span>
             </div>
           </div>
+
           <div className="row">{actions}</div>
-        </div>
-        <div className="small" style={{ marginTop: 8 }}>
-          role: <span className="kbd">{u.role || "pending"}</span> · approved:{" "}
-          <span className="kbd">{String(!!u.approved)}</span> · blocked:{" "}
-          <span className="kbd">{String(!!u.blocked)}</span>
         </div>
       </div>
     </div>
@@ -110,40 +124,30 @@ export default function Admin({ adminEmail }) {
       <div className="card">
         <div className="card-header">
           <h2>Admin Approval</h2>
-          <p>Admin duyệt user đăng ký mới trước khi truy cập hệ thống báo cáo.</p>
+          <p>Duyệt user đăng ký mới trước khi truy cập hệ thống.</p>
         </div>
         <div className="card-body">
           <div className="row">
-            <span className="pill">
-              <span className="small">Pending</span> <span className="kbd">{counts.pending}</span>
-            </span>
-            <span className="pill">
-              <span className="small">Approved</span> <span className="kbd">{counts.approved}</span>
-            </span>
-            <span className="pill">
-              <span className="small">Blocked</span> <span className="kbd">{counts.blocked}</span>
-            </span>
+            <span className="pill"><span className="small">Pending</span> <span className="kbd">{counts.pending}</span></span>
+            <span className="pill"><span className="small">Approved</span> <span className="kbd">{counts.approved}</span></span>
+            <span className="pill"><span className="small">Blocked</span> <span className="kbd">{counts.blocked}</span></span>
           </div>
-          {err ? <div style={{ marginTop: 10 }} className="small">Lỗi: {err}</div> : null}
-          <div className="hr" />
-          <div className="small">
-            Admin email: <span className="kbd">{adminEmail}</span>
-          </div>
+          {err ? <div className="small" style={{ marginTop: 10 }}>Lỗi: {err}</div> : null}
         </div>
       </div>
 
       <div className="grid two">
         <div className="card">
           <div className="card-header">
-            <h2>Pending users</h2>
-            <p>Các tài khoản vừa đăng ký, chờ duyệt.</p>
+            <h2>Pending Users</h2>
+            <p>Tài khoản đang chờ duyệt</p>
           </div>
           <div className="card-body" style={{ display: "grid", gap: 10 }}>
             {pending.length === 0 ? (
               <div className="small">Không có user pending.</div>
             ) : (
               pending.map((u) => (
-                <Row
+                <UserCard
                   key={u.id}
                   u={u}
                   actions={
@@ -164,15 +168,15 @@ export default function Admin({ adminEmail }) {
 
         <div className="card">
           <div className="card-header">
-            <h2>Approved users</h2>
-            <p>Danh sách đã được duyệt.</p>
+            <h2>Approved Users</h2>
+            <p>Đã được cấp quyền truy cập</p>
           </div>
           <div className="card-body" style={{ display: "grid", gap: 10 }}>
             {approved.length === 0 ? (
               <div className="small">Chưa có user approved.</div>
             ) : (
               approved.map((u) => (
-                <Row
+                <UserCard
                   key={u.id}
                   u={u}
                   actions={
@@ -193,15 +197,15 @@ export default function Admin({ adminEmail }) {
 
       <div className="card">
         <div className="card-header">
-          <h2>Blocked users</h2>
-          <p>Đã bị chặn (có thể mở lại về pending).</p>
+          <h2>Blocked Users</h2>
+          <p>Tài khoản bị chặn</p>
         </div>
         <div className="card-body" style={{ display: "grid", gap: 10 }}>
           {blocked.length === 0 ? (
             <div className="small">Không có user bị chặn.</div>
           ) : (
             blocked.map((u) => (
-              <Row
+              <UserCard
                 key={u.id}
                 u={u}
                 actions={
