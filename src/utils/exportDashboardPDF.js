@@ -1,400 +1,933 @@
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
-const formatCurrency = (value) => {
-  const num = Number(value || 0);
-  return new Intl.NumberFormat("vi-VN").format(num) + " đ";
+const BRAND = {
+  primary: "#0F4C81",
+  secondary: "#1F7AE0",
+  accent: "#E8F1FB",
+  success: "#0F9D58",
+  warning: "#F59E0B",
+  danger: "#DC2626",
+  text: "#0F172A",
+  muted: "#64748B",
+  border: "#E2E8F0",
+  bg: "#F8FAFC",
+  white: "#FFFFFF",
 };
 
-const formatNumber = (value) => {
-  return new Intl.NumberFormat("vi-VN").format(Number(value || 0));
-};
-
-const formatPercent = (value) => {
-  return `${Math.round(Number(value || 0))}%`;
-};
-
-const formatDate = (value) => {
-  if (!value) return "";
-  const d = value?.toDate ? value.toDate() : new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value || "");
-  return d.toLocaleDateString("vi-VN");
-};
-
-const stripMarkdown = (text = "") => {
-  return String(text)
-    .replace(/\*\*(.*?)\*\*/g, "$1")
-    .replace(/\*(.*?)\*/g, "$1")
-    .replace(/`(.*?)`/g, "$1")
-    .replace(/#+\s/g, "")
-    .trim();
-};
-
-const safeArray = (arr) => (Array.isArray(arr) ? arr : []);
-
-const getTopPersonName = (item) =>
-  item?.label || item?.name || item?.employeeName || "-";
-
-const getTopAreaName = (item) =>
-  item?.label || item?.name || item?.area || item?.province || "-";
-
-const getTopValue = (item) =>
-  Number(
-    item?.value ??
-      item?.revenue ??
-      item?.sales ??
-      item?.totalSales ??
-      0
-  );
-
-export async function exportDashboardPDF({
-  periodLabel = "",
-  dateRange = {},
-  summary = {},
-  healthScore = {},
-  executiveBrief = {},
-  aiExecutiveBrief = {},
-  topEmployees = [],
-  topAreas = [],
-  risks = [],
-  opportunities = [],
-  generatedBy = "VP-PHARM AI Weekly Sales Intelligence",
-}) {
-  const doc = new jsPDF("p", "mm", "a4");
-  const pageWidth = 210;
-  const pageHeight = 297;
-  const margin = 16;
-  const contentWidth = pageWidth - margin * 2;
-  let y = 20;
-
-  const addPageIfNeeded = (neededHeight = 10) => {
-    if (y + neededHeight > pageHeight - 18) {
-      doc.addPage();
-      y = 20;
-    }
-  };
-
-  const addTitle = (text, size = 20) => {
-    addPageIfNeeded(14);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(size);
-    doc.text(text, margin, y);
-    y += 9;
-  };
-
-  const addSubTitle = (text) => {
-    addPageIfNeeded(10);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text(text, margin, y);
-    y += 7;
-  };
-
-  const addParagraph = (text = "", fontSize = 11, spacing = 6) => {
-    const clean = stripMarkdown(text || "");
-    if (!clean) return;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(fontSize);
-    const lines = doc.splitTextToSize(clean, contentWidth);
-    const blockHeight = lines.length * 5.2;
-    addPageIfNeeded(blockHeight + 2);
-    doc.text(lines, margin, y);
-    y += blockHeight + spacing;
-  };
-
-  const addBulletList = (items = [], fontSize = 11) => {
-    const list = safeArray(items).filter(Boolean);
-    if (!list.length) return;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(fontSize);
-
-    list.forEach((item) => {
-      const clean =
-        typeof item === "string"
-          ? stripMarkdown(item)
-          : stripMarkdown(
-              item?.title
-                ? `${item.title}${item?.reason ? `: ${item.reason}` : ""}`
-                : JSON.stringify(item)
-            );
-
-      const lines = doc.splitTextToSize(`• ${clean}`, contentWidth - 2);
-      const blockHeight = lines.length * 5.2;
-      addPageIfNeeded(blockHeight + 1);
-      doc.text(lines, margin + 1, y);
-      y += blockHeight + 2;
-    });
-
-    y += 2;
-  };
-
-  const addDivider = () => {
-    addPageIfNeeded(4);
-    doc.setDrawColor(210, 210, 210);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 6;
-  };
-
-  const addKpiGrid = (items = []) => {
-    const list = safeArray(items);
-    if (!list.length) return;
-
-    const colGap = 6;
-    const colWidth = (contentWidth - colGap) / 2;
-    const boxHeight = 20;
-
-    for (let i = 0; i < list.length; i += 2) {
-      addPageIfNeeded(boxHeight + 4);
-
-      const left = list[i];
-      const right = list[i + 1];
-
-      const drawBox = (x, item) => {
-        if (!item) return;
-        doc.setDrawColor(220, 220, 220);
-        doc.roundedRect(x, y, colWidth, boxHeight, 2, 2);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.text(String(item.label || ""), x + 4, y + 6);
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(14);
-        doc.text(String(item.value || ""), x + 4, y + 14);
-      };
-
-      drawBox(margin, left);
-      drawBox(margin + colWidth + colGap, right);
-
-      y += boxHeight + 5;
-    }
-  };
-
-  const addSimpleTable = (title, rows = [], columns = []) => {
-    if (!rows.length) return;
-
-    addSubTitle(title);
-    addPageIfNeeded(10);
-
-    const colWidths = columns.map((c) => c.width);
-    const headers = columns.map((c) => c.label);
-    let x = margin;
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-
-    headers.forEach((header, idx) => {
-      doc.text(header, x + 1, y);
-      x += colWidths[idx];
-    });
-
-    y += 4;
-    doc.setDrawColor(180, 180, 180);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 5;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-
-    rows.forEach((row) => {
-      let rowHeight = 5;
-      const wrappedCells = columns.map((col) => {
-        const value = String(row[col.key] ?? "");
-        const lines = doc.splitTextToSize(value, col.width - 2);
-        rowHeight = Math.max(rowHeight, lines.length * 4.8);
-        return lines;
-      });
-
-      addPageIfNeeded(rowHeight + 3);
-
-      let xCell = margin;
-      wrappedCells.forEach((lines, idx) => {
-        doc.text(lines, xCell + 1, y);
-        xCell += colWidths[idx];
-      });
-
-      y += rowHeight + 2;
-      doc.setDrawColor(235, 235, 235);
-      doc.line(margin, y, pageWidth - margin, y);
-      y += 3;
-    });
-
-    y += 2;
-  };
-
-  // ===== PAGE 1: COVER =====
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.text("VP-PHARM", margin, y);
-  y += 10;
-
-  doc.setFontSize(16);
-  doc.text("AI WEEKLY SALES INTELLIGENCE", margin, y);
-  y += 14;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text(`Kỳ báo cáo: ${periodLabel || "Tùy chọn"}`, margin, y);
-  y += 7;
-
-  doc.text(
-    `Từ ngày: ${formatDate(dateRange.start)}   |   Đến ngày: ${formatDate(dateRange.end)}`,
-    margin,
-    y
-  );
-  y += 7;
-
-  doc.text(`Ngày xuất báo cáo: ${new Date().toLocaleString("vi-VN")}`, margin, y);
-  y += 7;
-
-  doc.text(`Nguồn tạo: ${generatedBy}`, margin, y);
-  y += 12;
-
-  addDivider();
-
-  addSubTitle("Tóm tắt điều hành");
-  addParagraph(
-    aiExecutiveBrief?.summary ||
-      executiveBrief?.summary ||
-      "Báo cáo điều hành tổng hợp hiệu quả bán hàng, mức độ phủ, chất lượng doanh số và các trọng tâm hành động cho kỳ hiện tại."
-  );
-
-  addSubTitle("Điểm điều hành nổi bật");
-  addBulletList(
-    aiExecutiveBrief?.highlights?.length
-      ? aiExecutiveBrief.highlights
-      : executiveBrief?.highlights || []
-  );
-
-  addSubTitle("Cảnh báo điều hành");
-  addBulletList(
-    aiExecutiveBrief?.warnings?.length
-      ? aiExecutiveBrief.warnings
-      : executiveBrief?.warnings || []
-  );
-
-  // ===== PAGE 2: KPI =====
-  doc.addPage();
-  y = 20;
-
-  addTitle("1. TỔNG QUAN KPI ĐIỀU HÀNH", 16);
-
-  addKpiGrid([
-    { label: "Tổng số báo cáo", value: formatNumber(summary.totalReports) },
-    { label: "Tổng khách viếng thăm", value: formatNumber(summary.totalVisits) },
-    { label: "Doanh số chuyến đi", value: formatCurrency(summary.tripRevenue) },
-    { label: "Doanh số dự kiến", value: formatCurrency(summary.expectedRevenue) },
-    { label: "Số nhân viên active", value: formatNumber(summary.activeEmployees) },
-    { label: "Health Score", value: formatPercent(healthScore.total) },
-    { label: "Coverage Score", value: formatPercent(healthScore.coverage) },
-    { label: "Sales Quality Score", value: formatPercent(healthScore.salesQuality) },
-    { label: "Market Execution Score", value: formatPercent(healthScore.marketExecution) },
-    { label: "Phân loại", value: healthScore.label || "" },
-  ]);
-
-  addDivider();
-
-  addSubTitle("Nhận định KPI");
-  addParagraph(
-    aiExecutiveBrief?.salesFocus ||
-      "Trọng tâm điều hành cần theo dõi bao gồm tăng trưởng doanh số, chất lượng độ phủ, khả năng duy trì tần suất viếng thăm và hiệu quả triển khai thị trường theo khu vực."
-  );
-
-  // ===== PAGE 3: AI CEO BRIEF =====
-  doc.addPage();
-  y = 20;
-
-  addTitle("2. AI CEO BRIEF", 16);
-
-  addSubTitle("Tóm tắt điều hành tuần");
-  addParagraph(aiExecutiveBrief?.summary || "");
-
-  addSubTitle("Trọng tâm doanh số");
-  addParagraph(aiExecutiveBrief?.salesFocus || "");
-
-  addSubTitle("Rủi ro điều hành");
-  addParagraph(aiExecutiveBrief?.risksNarrative || "");
-  addBulletList(aiExecutiveBrief?.riskBullets || risks);
-
-  addSubTitle("Cơ hội tăng trưởng");
-  addParagraph(aiExecutiveBrief?.opportunitiesNarrative || "");
-  addBulletList(aiExecutiveBrief?.opportunityBullets || opportunities);
-
-  addSubTitle("Hành động tuần tới");
-  addBulletList(
-    aiExecutiveBrief?.nextActions?.length
-      ? aiExecutiveBrief.nextActions
-      : executiveBrief?.actions || []
-  );
-
-  // ===== PAGE 4: TOP RANKING =====
-  doc.addPage();
-  y = 20;
-
-  addTitle("3. TOP RANKING", 16);
-
-  addSimpleTable(
-    "Top nhân viên",
-    safeArray(topEmployees).slice(0, 10).map((item, index) => ({
-      rank: index + 1,
-      name: getTopPersonName(item),
-      revenue: formatCurrency(getTopValue(item)),
-      visits: "-",
-    })),
-    [
-      { key: "rank", label: "Hạng", width: 18 },
-      { key: "name", label: "Nhân viên", width: 72 },
-      { key: "revenue", label: "Doanh số", width: 50 },
-      { key: "visits", label: "Viếng thăm", width: 34 },
-    ]
-  );
-
-  addSimpleTable(
-    "Top địa bàn",
-    safeArray(topAreas).slice(0, 10).map((item, index) => ({
-      rank: index + 1,
-      area: getTopAreaName(item),
-      revenue: formatCurrency(getTopValue(item)),
-      reports: "-",
-    })),
-    [
-      { key: "rank", label: "Hạng", width: 18 },
-      { key: "area", label: "Địa bàn", width: 72 },
-      { key: "revenue", label: "Doanh số", width: 50 },
-      { key: "reports", label: "Báo cáo", width: 34 },
-    ]
-  );
-
-  // ===== PAGE 5: FINAL ACTIONS =====
-  doc.addPage();
-  y = 20;
-
-  addTitle("4. KHUYẾN NGHỊ ĐIỀU HÀNH", 16);
-
-  addSubTitle("Điểm tốt nổi bật");
-  addBulletList(
-    aiExecutiveBrief?.highlights?.length
-      ? aiExecutiveBrief.highlights
-      : executiveBrief?.highlights || []
-  );
-
-  addSubTitle("Cảnh báo cần xử lý");
-  addBulletList(
-    aiExecutiveBrief?.warnings?.length
-      ? aiExecutiveBrief.warnings
-      : executiveBrief?.warnings || []
-  );
-
-  addSubTitle("Top 3 hành động đề xuất tuần tới");
-  addBulletList(
-    aiExecutiveBrief?.nextActions?.slice(0, 3)?.length
-      ? aiExecutiveBrief.nextActions.slice(0, 3)
-      : executiveBrief?.actions?.slice(0, 3) || []
-  );
-
-  addDivider();
-  addParagraph(
-    "Tài liệu này được tạo tự động từ hệ thống VP-PHARM AI Weekly Sales Intelligence nhằm hỗ trợ điều hành bán hàng, phát hiện rủi ro và định hướng hành động tuần tiếp theo."
-  );
-
-  const fileName = `VP-PHARM_CEO_Brief_${new Date().toISOString().slice(0, 10)}.pdf`;
-  doc.save(fileName);
+const DEFAULT_LOGO =
+  "https://firebasestorage.googleapis.com/v0/b/cnlb-4d714.firebasestorage.app/o/lOGO%20DOC.png?alt=media&token=ad7d71e2-aa27-4ed5-81d8-9f8ee9ace0ac";
+
+function formatNumber(value) {
+  const n = Number(value || 0);
+  return new Intl.NumberFormat("vi-VN").format(n);
 }
+
+function formatCurrency(value) {
+  const n = Number(value || 0);
+  return `${new Intl.NumberFormat("vi-VN").format(n)} đ`;
+}
+
+function formatPercent(value) {
+  const n = Number(value || 0);
+  return `${Math.round(n)}%`;
+}
+
+function formatDate(date = new Date()) {
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function safeText(value, fallback = "Chưa có dữ liệu") {
+  if (value === null || value === undefined) return fallback;
+  const s = String(value).trim();
+  return s || fallback;
+}
+
+function normalizeArray(arr) {
+  return Array.isArray(arr) ? arr : [];
+}
+
+function getHealthScore(metrics = {}) {
+  const coverage = Number(metrics.coverageScore ?? metrics.coverage ?? 0);
+  const salesQuality = Number(
+    metrics.salesQualityScore ?? metrics.salesQuality ?? 0
+  );
+  const marketExecution = Number(
+    metrics.marketExecutionScore ?? metrics.marketExecution ?? 0
+  );
+
+  const values = [coverage, salesQuality, marketExecution].filter(
+    (v) => !Number.isNaN(v) && v >= 0
+  );
+
+  if (!values.length) return 0;
+  return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+}
+
+function getScoreLabel(score) {
+  if (score >= 85) return { label: "Rất tốt", color: BRAND.success };
+  if (score >= 70) return { label: "Tốt", color: BRAND.secondary };
+  if (score >= 50) return { label: "Cần chú ý", color: BRAND.warning };
+  return { label: "Rủi ro", color: BRAND.danger };
+}
+
+function buildExecutiveSummary({
+  totalReports = 0,
+  totalVisits = 0,
+  totalTripRevenue = 0,
+  totalExpectedRevenue = 0,
+  activeEmployees = 0,
+  score = 0,
+}) {
+  const state =
+    score >= 85
+      ? "tích cực"
+      : score >= 70
+      ? "ổn định"
+      : score >= 50
+      ? "cần theo dõi sát"
+      : "có dấu hiệu rủi ro";
+
+  return `Trong kỳ báo cáo này, hệ thống ghi nhận ${formatNumber(
+    totalReports
+  )} báo cáo tuần từ ${formatNumber(
+    activeEmployees
+  )} nhân sự hoạt động, với ${formatNumber(
+    totalVisits
+  )} lượt viếng thăm khách hàng. Doanh số chuyến đi đạt ${formatCurrency(
+    totalTripRevenue
+  )}, doanh số dự kiến đạt ${formatCurrency(
+    totalExpectedRevenue
+  )}. AI Health Score hiện ở mức ${score}/100, phản ánh bức tranh điều hành ${state}.`;
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function cardKPI(label, value, sub = "") {
+  return `
+    <div class="kpi-card">
+      <div class="kpi-label">${escapeHtml(label)}</div>
+      <div class="kpi-value">${escapeHtml(value)}</div>
+      <div class="kpi-sub">${escapeHtml(sub)}</div>
+    </div>
+  `;
+}
+
+function listBlock(title, items = [], type = "default") {
+  const cls = type === "danger" ? "list danger" : type === "success" ? "list success" : "list";
+  const content = items.length
+    ? items
+        .map(
+          (item) => `
+            <li>
+              <span class="bullet"></span>
+              <span>${escapeHtml(item)}</span>
+            </li>
+          `
+        )
+        .join("")
+    : `<li><span class="bullet"></span><span>Chưa có dữ liệu</span></li>`;
+
+  return `
+    <div class="${cls}">
+      <div class="list-title">${escapeHtml(title)}</div>
+      <ul>${content}</ul>
+    </div>
+  `;
+}
+
+function rankingTable(title, rows = [], mode = "employee") {
+  const headers =
+    mode === "province"
+      ? `<tr><th>#</th><th>Địa bàn</th><th>Doanh số</th><th>Ghi chú</th></tr>`
+      : `<tr><th>#</th><th>Nhân viên</th><th>Doanh số</th><th>Viếng thăm</th></tr>`;
+
+  const body = rows.length
+    ? rows
+        .slice(0, 8)
+        .map((row, index) => {
+          if (mode === "province") {
+            return `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${escapeHtml(row.name ?? row.province ?? "Chưa rõ")}</td>
+                <td>${escapeHtml(
+                  formatCurrency(row.value ?? row.tripRevenue ?? row.revenue ?? 0)
+                )}</td>
+                <td>${escapeHtml(row.note ?? "—")}</td>
+              </tr>
+            `;
+          }
+
+          return `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${escapeHtml(row.name ?? row.employee ?? "Chưa rõ")}</td>
+              <td>${escapeHtml(
+                formatCurrency(row.tripRevenue ?? row.revenue ?? row.value ?? 0)
+              )}</td>
+              <td>${escapeHtml(
+                formatNumber(row.visitCustomerCount ?? row.visits ?? 0)
+              )}</td>
+            </tr>
+          `;
+        })
+        .join("")
+    : `
+      <tr>
+        <td colspan="4" style="text-align:center;color:${BRAND.muted}">
+          Chưa có dữ liệu xếp hạng
+        </td>
+      </tr>
+    `;
+
+  return `
+    <div class="table-card">
+      <div class="section-title">${escapeHtml(title)}</div>
+      <table class="ranking-table">
+        <thead>${headers}</thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function createPageShell(content, { pageTitle, pageNumber, reportDate, logoUrl }) {
+  return `
+    <div class="pdf-page">
+      <div class="page-inner">
+        <div class="page-header">
+          <div class="brand-left">
+            <img src="${logoUrl}" alt="VP-PHARM Logo" class="brand-logo" />
+            <div>
+              <div class="brand-name">VP-PHARM</div>
+              <div class="brand-sub">AI Weekly Sales Intelligence</div>
+            </div>
+          </div>
+          <div class="header-right">
+            <div class="header-page-title">${escapeHtml(pageTitle)}</div>
+            <div class="header-date">Ngày xuất: ${escapeHtml(reportDate)}</div>
+          </div>
+        </div>
+
+        ${content}
+
+        <div class="page-footer">
+          <span>VP-PHARM Executive Report</span>
+          <span>Trang ${pageNumber}/5</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildStyles() {
+  return `
+    <style>
+      * { box-sizing: border-box; }
+      .pdf-root {
+        width: 794px;
+        background: #edf2f7;
+        padding: 24px;
+        font-family: Inter, Arial, Helvetica, sans-serif;
+        color: ${BRAND.text};
+      }
+
+      .pdf-page {
+        width: 794px;
+        min-height: 1123px;
+        background: ${BRAND.white};
+        margin: 0 auto 24px auto;
+        padding: 0;
+        overflow: hidden;
+        page-break-after: always;
+      }
+
+      .page-inner {
+        width: 100%;
+        min-height: 1123px;
+        padding: 34px 34px 24px 34px;
+        position: relative;
+        background:
+          linear-gradient(180deg, rgba(15,76,129,0.05) 0%, rgba(255,255,255,0) 180px),
+          ${BRAND.white};
+      }
+
+      .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 26px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid ${BRAND.border};
+      }
+
+      .brand-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .brand-logo {
+        width: 52px;
+        height: 52px;
+        object-fit: contain;
+        border-radius: 12px;
+        background: #fff;
+      }
+
+      .brand-name {
+        font-size: 22px;
+        font-weight: 800;
+        color: ${BRAND.primary};
+        letter-spacing: 0.4px;
+      }
+
+      .brand-sub {
+        font-size: 12px;
+        color: ${BRAND.muted};
+        margin-top: 2px;
+      }
+
+      .header-right {
+        text-align: right;
+      }
+
+      .header-page-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: ${BRAND.primary};
+      }
+
+      .header-date {
+        font-size: 11px;
+        color: ${BRAND.muted};
+        margin-top: 4px;
+      }
+
+      .hero {
+        background: linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.secondary} 100%);
+        color: white;
+        border-radius: 22px;
+        padding: 28px;
+        margin-bottom: 22px;
+      }
+
+      .hero-label {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        opacity: 0.95;
+        margin-bottom: 10px;
+      }
+
+      .hero-title {
+        font-size: 34px;
+        font-weight: 800;
+        line-height: 1.2;
+        margin-bottom: 10px;
+      }
+
+      .hero-desc {
+        font-size: 14px;
+        line-height: 1.7;
+        opacity: 0.98;
+      }
+
+      .score-box {
+        margin-top: 18px;
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        background: rgba(255,255,255,0.14);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 16px;
+        padding: 12px 16px;
+      }
+
+      .score-number {
+        font-size: 28px;
+        font-weight: 800;
+      }
+
+      .score-meta {
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .summary-card {
+        background: ${BRAND.bg};
+        border: 1px solid ${BRAND.border};
+        border-radius: 18px;
+        padding: 18px;
+        margin-bottom: 20px;
+      }
+
+      .section-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: ${BRAND.primary};
+        margin-bottom: 14px;
+      }
+
+      .section-text {
+        font-size: 14px;
+        line-height: 1.75;
+        color: ${BRAND.text};
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .grid-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 14px;
+      }
+
+      .grid-4 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .kpi-card {
+        background: ${BRAND.white};
+        border: 1px solid ${BRAND.border};
+        border-radius: 18px;
+        padding: 16px;
+        min-height: 110px;
+      }
+
+      .kpi-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: ${BRAND.muted};
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .kpi-value {
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1.15;
+        color: ${BRAND.text};
+        margin-bottom: 8px;
+      }
+
+      .kpi-sub {
+        font-size: 12px;
+        color: ${BRAND.muted};
+      }
+
+      .metric-strip {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-top: 8px;
+      }
+
+      .metric-mini {
+        background: ${BRAND.bg};
+        border: 1px solid ${BRAND.border};
+        border-radius: 16px;
+        padding: 16px;
+      }
+
+      .metric-mini .name {
+        font-size: 12px;
+        color: ${BRAND.muted};
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .metric-mini .val {
+        font-size: 26px;
+        font-weight: 800;
+      }
+
+      .list {
+        background: ${BRAND.white};
+        border: 1px solid ${BRAND.border};
+        border-radius: 18px;
+        padding: 16px;
+      }
+
+      .list.success {
+        background: #f0fdf4;
+        border-color: #bbf7d0;
+      }
+
+      .list.danger {
+        background: #fef2f2;
+        border-color: #fecaca;
+      }
+
+      .list-title {
+        font-size: 14px;
+        font-weight: 800;
+        margin-bottom: 12px;
+        color: ${BRAND.text};
+      }
+
+      .list ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .list li {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 13px;
+        line-height: 1.65;
+        margin-bottom: 10px;
+      }
+
+      .bullet {
+        width: 8px;
+        height: 8px;
+        min-width: 8px;
+        border-radius: 999px;
+        background: ${BRAND.secondary};
+        margin-top: 7px;
+      }
+
+      .table-card {
+        background: ${BRAND.white};
+        border: 1px solid ${BRAND.border};
+        border-radius: 18px;
+        padding: 16px;
+      }
+
+      .ranking-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+
+      .ranking-table th {
+        text-align: left;
+        padding: 12px 10px;
+        background: ${BRAND.bg};
+        color: ${BRAND.primary};
+        font-size: 12px;
+        border-bottom: 1px solid ${BRAND.border};
+      }
+
+      .ranking-table td {
+        padding: 11px 10px;
+        border-bottom: 1px solid ${BRAND.border};
+        color: ${BRAND.text};
+      }
+
+      .ranking-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .action-card {
+        border: 1px solid ${BRAND.border};
+        border-radius: 18px;
+        padding: 16px;
+        background: ${BRAND.white};
+      }
+
+      .action-card .action-title {
+        font-size: 14px;
+        font-weight: 800;
+        color: ${BRAND.primary};
+        margin-bottom: 10px;
+      }
+
+      .action-card .action-body {
+        font-size: 13px;
+        line-height: 1.7;
+        color: ${BRAND.text};
+      }
+
+      .page-footer {
+        position: absolute;
+        left: 34px;
+        right: 34px;
+        bottom: 18px;
+        display: flex;
+        justify-content: space-between;
+        color: ${BRAND.muted};
+        font-size: 11px;
+        border-top: 1px solid ${BRAND.border};
+        padding-top: 10px;
+      }
+    </style>
+  `;
+}
+
+function extractDashboardData(raw = {}) {
+  const metrics = raw.metrics || raw.kpi || {};
+  const charts = raw.charts || {};
+  const ai = raw.ai || raw.analysis || {};
+  const ranking = raw.ranking || {};
+  const weeklyReports = normalizeArray(raw.weeklyReports || raw.reports);
+
+  const totalReports =
+    raw.totalReports ?? metrics.totalReports ?? weeklyReports.length ?? 0;
+
+  const totalVisits =
+    raw.totalVisits ??
+    metrics.totalVisits ??
+    weeklyReports.reduce((sum, item) => sum + Number(item.visitCustomerCount || 0), 0);
+
+  const totalTripRevenue =
+    raw.totalTripRevenue ??
+    metrics.totalTripRevenue ??
+    weeklyReports.reduce((sum, item) => sum + Number(item.tripRevenue || 0), 0);
+
+  const totalExpectedRevenue =
+    raw.totalExpectedRevenue ??
+    metrics.totalExpectedRevenue ??
+    weeklyReports.reduce((sum, item) => sum + Number(item.expectedRevenue || 0), 0);
+
+  const activeEmployees =
+    raw.activeEmployees ??
+    metrics.activeEmployees ??
+    new Set(weeklyReports.map((x) => x.employee).filter(Boolean)).size;
+
+  const healthScore =
+    raw.healthScore ?? metrics.healthScore ?? getHealthScore(metrics);
+
+  return {
+    companyName: raw.companyName || "VP-PHARM",
+    reportDate: formatDate(raw.reportDate || new Date()),
+    logoUrl: raw.logoUrl || DEFAULT_LOGO,
+
+    totalReports,
+    totalVisits,
+    totalTripRevenue,
+    totalExpectedRevenue,
+    activeEmployees,
+
+    healthScore,
+    coverageScore: Number(metrics.coverageScore ?? metrics.coverage ?? 0),
+    salesQualityScore: Number(
+      metrics.salesQualityScore ?? metrics.salesQuality ?? 0
+    ),
+    marketExecutionScore: Number(
+      metrics.marketExecutionScore ?? metrics.marketExecution ?? 0
+    ),
+
+    ceoBrief:
+      ai.ceoBrief ||
+      raw.ceoBrief ||
+      buildExecutiveSummary({
+        totalReports,
+        totalVisits,
+        totalTripRevenue,
+        totalExpectedRevenue,
+        activeEmployees,
+        score: healthScore,
+      }),
+
+    executiveWins: normalizeArray(
+      ai.executiveWins || raw.executiveWins || raw.wins
+    ),
+    executiveWarnings: normalizeArray(
+      ai.executiveWarnings || raw.executiveWarnings || raw.warnings
+    ),
+    suggestedActions: normalizeArray(
+      ai.suggestedActions || raw.suggestedActions || raw.actions
+    ),
+    insights: normalizeArray(ai.insights || raw.insights),
+    risks: normalizeArray(ai.risks || raw.risks),
+    opportunities: normalizeArray(ai.opportunities || raw.opportunities),
+
+    topEmployees: normalizeArray(
+      ranking.topEmployees || charts.topEmployees || raw.topEmployees
+    ),
+    topProvinces: normalizeArray(
+      ranking.topProvinces || charts.topProvinces || raw.topProvinces
+    ),
+  };
+}
+
+function buildPages(data) {
+  const scoreTag = getScoreLabel(data.healthScore);
+
+  const page1 = createPageShell(
+    `
+      <div class="hero">
+        <div class="hero-label">CEO BRIEF</div>
+        <div class="hero-title">Báo cáo điều hành tuần</div>
+        <div class="hero-desc">${escapeHtml(data.ceoBrief)}</div>
+        <div class="score-box">
+          <div class="score-number">${data.healthScore}/100</div>
+          <div class="score-meta">
+            <div><strong>AI Health Score</strong></div>
+            <div>${escapeHtml(scoreTag.label)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="summary-card">
+        <div class="section-title">Executive Summary</div>
+        <div class="section-text">
+          ${escapeHtml(
+            buildExecutiveSummary({
+              totalReports: data.totalReports,
+              totalVisits: data.totalVisits,
+              totalTripRevenue: data.totalTripRevenue,
+              totalExpectedRevenue: data.totalExpectedRevenue,
+              activeEmployees: data.activeEmployees,
+              score: data.healthScore,
+            })
+          )}
+        </div>
+      </div>
+
+      <div class="grid-2">
+        ${listBlock("Executive Wins", data.executiveWins, "success")}
+        ${listBlock("Executive Warnings", data.executiveWarnings, "danger")}
+      </div>
+    `,
+    {
+      pageTitle: "Trang 1 · CEO Brief",
+      pageNumber: 1,
+      reportDate: data.reportDate,
+      logoUrl: data.logoUrl,
+    }
+  );
+
+  const page2 = createPageShell(
+    `
+      <div class="section-title">KPI Overview</div>
+
+      <div class="grid-4" style="margin-bottom:16px;">
+        ${cardKPI("Tổng báo cáo", formatNumber(data.totalReports), "Số báo cáo tuần đã ghi nhận")}
+        ${cardKPI("Tổng khách viếng thăm", formatNumber(data.totalVisits), "Lượt tiếp cận khách hàng")}
+        ${cardKPI("Doanh số chuyến đi", formatCurrency(data.totalTripRevenue), "Doanh số đã thực hiện")}
+        ${cardKPI("Doanh số dự kiến", formatCurrency(data.totalExpectedRevenue), "Pipeline kỳ tới")}
+        ${cardKPI("Nhân viên hoạt động", formatNumber(data.activeEmployees), "Có báo cáo trong kỳ")}
+        ${cardKPI("AI Health Score", `${data.healthScore}/100`, scoreTag.label)}
+      </div>
+
+      <div class="summary-card">
+        <div class="section-title">Health Score Composition</div>
+        <div class="metric-strip">
+          <div class="metric-mini">
+            <div class="name">Coverage</div>
+            <div class="val">${formatPercent(data.coverageScore)}</div>
+          </div>
+          <div class="metric-mini">
+            <div class="name">Sales Quality</div>
+            <div class="val">${formatPercent(data.salesQualityScore)}</div>
+          </div>
+          <div class="metric-mini">
+            <div class="name">Market Execution</div>
+            <div class="val">${formatPercent(data.marketExecutionScore)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="summary-card">
+        <div class="section-title">Executive Interpretation</div>
+        <div class="section-text">
+          AI Health Score hiện đạt <strong>${data.healthScore}/100</strong>, trong đó Coverage = ${formatPercent(
+      data.coverageScore
+    )}, Sales Quality = ${formatPercent(
+      data.salesQualityScore
+    )}, Market Execution = ${formatPercent(
+      data.marketExecutionScore
+    )}. Đây là chỉ báo tổng hợp để Ban điều hành theo dõi độ phủ, chất lượng bán hàng và khả năng triển khai thị trường.
+        </div>
+      </div>
+    `,
+    {
+      pageTitle: "Trang 2 · KPI Overview",
+      pageNumber: 2,
+      reportDate: data.reportDate,
+      logoUrl: data.logoUrl,
+    }
+  );
+
+  const page3 = createPageShell(
+    `
+      <div class="section-title">AI Insight</div>
+
+      <div class="grid-2" style="margin-bottom:16px;">
+        ${listBlock("Key Insights", data.insights)}
+        ${listBlock("Opportunities", data.opportunities, "success")}
+      </div>
+
+      <div class="grid-2">
+        ${listBlock("Risks", data.risks, "danger")}
+        ${listBlock("Suggested Actions", data.suggestedActions)}
+      </div>
+    `,
+    {
+      pageTitle: "Trang 3 · AI Insight",
+      pageNumber: 3,
+      reportDate: data.reportDate,
+      logoUrl: data.logoUrl,
+    }
+  );
+
+  const page4 = createPageShell(
+    `
+      <div class="section-title">Top Ranking</div>
+
+      <div class="grid-2">
+        ${rankingTable("Top nhân viên", data.topEmployees, "employee")}
+        ${rankingTable("Top địa bàn", data.topProvinces, "province")}
+      </div>
+    `,
+    {
+      pageTitle: "Trang 4 · Top Ranking",
+      pageNumber: 4,
+      reportDate: data.reportDate,
+      logoUrl: data.logoUrl,
+    }
+  );
+
+  const page5 = createPageShell(
+    `
+      <div class="section-title">Action Plan</div>
+
+      <div class="grid-2" style="margin-bottom:16px;">
+        <div class="action-card">
+          <div class="action-title">Ưu tiên 1 · Củng cố độ phủ</div>
+          <div class="action-body">
+            Tập trung rà soát nhân sự có số lượt viếng thăm thấp, tăng mật độ thăm khách hàng tại các địa bàn còn bỏ trống, và theo dõi sát số lượng khách hàng chưa khai thác.
+          </div>
+        </div>
+
+        <div class="action-card">
+          <div class="action-title">Ưu tiên 2 · Nâng chất lượng doanh số</div>
+          <div class="action-body">
+            Đối chiếu doanh số chuyến đi và doanh số dự kiến để xác định điểm nghẽn chuyển đổi, đồng thời coaching nhóm có doanh số cao nhưng chất lượng pipeline chưa ổn định.
+          </div>
+        </div>
+
+        <div class="action-card">
+          <div class="action-title">Ưu tiên 3 · Tối ưu thực thi thị trường</div>
+          <div class="action-body">
+            Kiểm tra lại tính đều của hoạt động theo tỉnh/thành, tránh tập trung quá mạnh vào một vài địa bàn trong khi các khu vực khác chưa được chăm sóc đúng mức.
+          </div>
+        </div>
+
+        <div class="action-card">
+          <div class="action-title">Ưu tiên 4 · Theo dõi điều hành hàng tuần</div>
+          <div class="action-body">
+            Duy trì cơ chế CEO Brief mỗi tuần, so sánh xu hướng Health Score theo chu kỳ, và xác nhận các hành động sau họp đã được triển khai thực tế hay chưa.
+          </div>
+        </div>
+      </div>
+
+      <div class="summary-card">
+        <div class="section-title">Khuyến nghị điều hành</div>
+        <div class="section-text">
+          ${escapeHtml(
+            data.suggestedActions.length
+              ? data.suggestedActions.join(" ")
+              : "Ban điều hành nên sử dụng đồng thời KPI, AI Insight và Top Ranking để ưu tiên hành động trong tuần kế tiếp."
+          )}
+        </div>
+      </div>
+    `,
+    {
+      pageTitle: "Trang 5 · Action Plan",
+      pageNumber: 5,
+      reportDate: data.reportDate,
+      logoUrl: data.logoUrl,
+    }
+  );
+
+  return [page1, page2, page3, page4, page5];
+}
+
+async function waitForImages(container) {
+  const images = Array.from(container.querySelectorAll("img"));
+  await Promise.all(
+    images.map(
+      (img) =>
+        new Promise((resolve) => {
+          if (img.complete) return resolve();
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+        })
+    )
+  );
+}
+
+async function renderPageToCanvas(pageEl) {
+  return html2canvas(pageEl, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#ffffff",
+    logging: false,
+  });
+}
+
+export async function exportDashboardPDF(rawData = {}) {
+  const data = extractDashboardData(rawData);
+  const pages = buildPages(data);
+
+  const container = document.createElement("div");
+  container.className = "pdf-export-mount";
+  container.style.position = "fixed";
+  container.style.left = "-100000px";
+  container.style.top = "0";
+  container.style.zIndex = "-1";
+  container.style.pointerEvents = "none";
+  container.innerHTML = `
+    ${buildStyles()}
+    <div class="pdf-root">
+      ${pages.join("")}
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  try {
+    await waitForImages(container);
+
+    const pageNodes = Array.from(container.querySelectorAll(".pdf-page"));
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+      compress: true,
+    });
+
+    for (let i = 0; i < pageNodes.length; i++) {
+      const canvas = await renderPageToCanvas(pageNodes[i]);
+      const imgData = canvas.toDataURL("image/jpeg", 0.92);
+
+      const pdfWidth = 210;
+      const pdfHeight = 297;
+
+      if (i > 0) pdf.addPage();
+      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
+    }
+
+    const fileName = `VP-PHARM_CEO_BRIEF_${data.reportDate}.pdf`;
+    pdf.save(fileName);
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
+export default exportDashboardPDF;

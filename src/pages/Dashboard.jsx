@@ -38,6 +38,9 @@ import {
 } from "recharts";
 import { exportDashboardPDF } from "../utils/exportDashboardPDF";
 
+const LOGO_URL =
+  "https://firebasestorage.googleapis.com/v0/b/cnlb-4d714.firebasestorage.app/o/lOGO%20DOC.png?alt=media&token=ad7d71e2-aa27-4ed5-81d8-9f8ee9ace0ac";
+
 function formatVND(value) {
   const amount = Number(value || 0);
   return new Intl.NumberFormat("vi-VN", {
@@ -576,6 +579,15 @@ function BriefList({ title, items, icon }) {
   );
 }
 
+function normalizeInsightItem(item) {
+  if (typeof item === "string") return item;
+  if (item?.title) return `${item.title}${item?.reason ? `: ${item.reason}` : ""}`;
+  if (item?.action) return item.action;
+  if (item?.name) return item.name;
+  if (item?.label) return item.label;
+  return item ? JSON.stringify(item) : "";
+}
+
 export default function Dashboard({
   isAdmin = false,
   isDirector = false,
@@ -766,7 +778,11 @@ export default function Dashboard({
     const salesQualityScore = clamp(average(productivityRates), 0, 100);
     const marketExecutionScore = clamp(average(marketControlRates), 0, 100);
     const healthScore = Math.round(
-      clamp(coverageScore * 0.35 + salesQualityScore * 0.4 + marketExecutionScore * 0.25, 0, 100)
+      clamp(
+        coverageScore * 0.35 + salesQualityScore * 0.4 + marketExecutionScore * 0.25,
+        0,
+        100
+      )
     );
 
     const risks = [];
@@ -779,11 +795,13 @@ export default function Dashboard({
         : r.analysis_json?.risks
         ? [r.analysis_json.risks]
         : [];
+
       const opportunityItems = Array.isArray(r.analysis_json?.opportunities)
         ? r.analysis_json.opportunities
         : r.analysis_json?.opportunities
         ? [r.analysis_json.opportunities]
         : [];
+
       const actionItems = Array.isArray(
         r.analysis_json?.nextWeekActions || r.analysis_json?.action_plan
       )
@@ -801,10 +819,12 @@ export default function Dashboard({
     for (const r of currentReports) {
       const weekCode = r.weekCode || r?.input?.weekCode || "";
       const weekLabel = formatWeekLabel(weekCode);
-      const fallbackLabel = String(r.weekFrom || r?.input?.weekFrom || "").slice(5, 10) || "N/A";
+      const fallbackLabel =
+        String(r.weekFrom || r?.input?.weekFrom || "").slice(5, 10) || "N/A";
       const key = weekLabel || fallbackLabel;
       weekMap.set(key, (weekMap.get(key) || 0) + Number(r.tripRevenue || 0));
     }
+
     const trendData = [...weekMap.entries()].map(([label, value]) => ({ label, value }));
 
     const reportStatus = classifyMetric(currentReports.length, 6, 3);
@@ -816,6 +836,7 @@ export default function Dashboard({
       currentReports,
       (r) => r.employeeName || r?.input?.employee?.name || "Chưa rõ nhân viên"
     )[0];
+
     const topProvince = buildTopMap(
       currentReports,
       (r) => r.province || r?.input?.province || "Chưa rõ địa bàn"
@@ -835,32 +856,50 @@ export default function Dashboard({
 
     if (currentTripRevenue >= prevTripRevenue) {
       executiveWins.push(
-        `Doanh số chuyến đi đang ${currentTripRevenue > prevTripRevenue ? "tăng" : "giữ ổn định"} so với kỳ trước (${formatPct(calcChange(currentTripRevenue, prevTripRevenue))}).`
+        `Doanh số chuyến đi đang ${
+          currentTripRevenue > prevTripRevenue ? "tăng" : "giữ ổn định"
+        } so với kỳ trước (${formatPct(calcChange(currentTripRevenue, prevTripRevenue))}).`
       );
     } else {
       executiveWarnings.push(
-        `Doanh số chuyến đi giảm so với kỳ trước (${formatPct(calcChange(currentTripRevenue, prevTripRevenue))}).`
+        `Doanh số chuyến đi giảm so với kỳ trước (${formatPct(
+          calcChange(currentTripRevenue, prevTripRevenue)
+        )}).`
       );
     }
 
     if (topEmployee) {
-      executiveWins.push(`Nhân viên nổi bật nhất hiện tại là ${topEmployee.label} với doanh số ${formatVND(topEmployee.value)}.`);
+      executiveWins.push(
+        `Nhân viên nổi bật nhất hiện tại là ${topEmployee.label} với doanh số ${formatVND(
+          topEmployee.value
+        )}.`
+      );
     }
 
     if (topProvince) {
-      executiveWins.push(`Địa bàn dẫn đầu hiện tại là ${topProvince.label} với doanh số ${formatVND(topProvince.value)}.`);
+      executiveWins.push(
+        `Địa bàn dẫn đầu hiện tại là ${topProvince.label} với doanh số ${formatVND(
+          topProvince.value
+        )}.`
+      );
     }
 
     if (coverageScore < 70) {
-      executiveActions.push("Ưu tiên nâng độ phủ khách hàng tại các địa bàn còn nhiều khách chưa khai thác.");
+      executiveActions.push(
+        "Ưu tiên nâng độ phủ khách hàng tại các địa bàn còn nhiều khách chưa khai thác."
+      );
     }
 
     if (salesQualityScore < 70) {
-      executiveActions.push("Rà soát chênh lệch giữa doanh số chuyến đi và doanh số dự kiến để tối ưu chốt đơn.");
+      executiveActions.push(
+        "Rà soát chênh lệch giữa doanh số chuyến đi và doanh số dự kiến để tối ưu chốt đơn."
+      );
     }
 
     if (marketExecutionScore < 60) {
-      executiveActions.push("Đánh giá lại phân bổ khách hàng phụ trách so với tổng khách toàn địa bàn.");
+      executiveActions.push(
+        "Đánh giá lại phân bổ khách hàng phụ trách so với tổng khách toàn địa bàn."
+      );
     }
 
     const normalizedActions = actions
@@ -928,83 +967,69 @@ export default function Dashboard({
   const healthTone = scoreTone(analytics.healthScore);
 
   async function handleExportPDF() {
+    const ceoBrief = [
+      `Báo cáo điều hành trong kỳ ${formatVNDate(analytics.from)} → ${formatVNDate(
+        analytics.to
+      )} ghi nhận ${analytics.totalReports} báo cáo, ${analytics.visits} lượt viếng thăm và doanh số chuyến đi đạt ${formatVND(
+        analytics.tripRevenue
+      )}.`,
+      `Doanh số dự kiến hiện ở mức ${formatVND(
+        analytics.expectedRevenue
+      )}, AI Health Score đạt ${analytics.healthScore}/100.`,
+      analytics.executiveWins[0] || analytics.executiveWarnings[0] || "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     await exportDashboardPDF({
-      periodLabel:
-        preset === "7d"
-          ? "7 ngày"
-          : preset === "30d"
-          ? "30 ngày"
-          : preset === "90d"
-          ? "90 ngày"
-          : "Tùy chọn",
-      dateRange: {
-        start: fromDate,
-        end: toDate,
-      },
-      summary: {
+      reportDate: analytics.to || new Date(),
+      logoUrl: LOGO_URL,
+
+      metrics: {
         totalReports: analytics.totalReports,
         totalVisits: analytics.visits,
-        tripRevenue: analytics.tripRevenue,
-        expectedRevenue: analytics.expectedRevenue,
+        totalTripRevenue: analytics.tripRevenue,
+        totalExpectedRevenue: analytics.expectedRevenue,
         activeEmployees: analytics.employeeCount,
+        healthScore: analytics.healthScore,
+        coverageScore: analytics.coverageScore,
+        salesQualityScore: analytics.salesQualityScore,
+        marketExecutionScore: analytics.marketExecutionScore,
       },
-      healthScore: {
-        total: analytics.healthScore,
-        coverage: analytics.coverageScore,
-        salesQuality: analytics.salesQualityScore,
-        marketExecution: analytics.marketExecutionScore,
-        label: scoreColor(analytics.healthScore),
+
+      ai: {
+        ceoBrief,
+        executiveWins: analytics.executiveWins,
+        executiveWarnings: analytics.executiveWarnings,
+        suggestedActions: analytics.suggestedActions,
+        insights: [
+          `Kỳ báo cáo: ${formatVNDate(analytics.from)} → ${formatVNDate(analytics.to)}.`,
+          `Biến động doanh số chuyến đi so với kỳ trước: ${formatPct(
+            analytics.tripRevenueChange
+          )}.`,
+          `Biến động doanh số dự kiến so với kỳ trước: ${formatPct(
+            analytics.expectedRevenueChange
+          )}.`,
+          `Biến động lượt viếng thăm so với kỳ trước: ${formatPct(analytics.visitsChange)}.`,
+        ],
+        risks: analytics.risks.map(normalizeInsightItem).filter(Boolean),
+        opportunities: analytics.opportunities.map(normalizeInsightItem).filter(Boolean),
       },
-      executiveBrief: {
-        summary: `Dashboard điều hành tổng hợp từ ${analytics.totalReports} báo cáo trong kỳ ${formatVNDate(analytics.from)} → ${formatVNDate(analytics.to)}.`,
-        highlights: analytics.executiveWins,
-        warnings: analytics.executiveWarnings,
-        actions: analytics.suggestedActions,
+
+      ranking: {
+        topEmployees: analytics.topEmployees.map((item) => ({
+          name: item.label,
+          tripRevenue: item.value,
+          visitCustomerCount: 0,
+        })),
+        topProvinces: analytics.topProvinces.map((item) => ({
+          name: item.label,
+          value: item.value,
+          note: "Top doanh số trong kỳ",
+        })),
       },
-      aiExecutiveBrief: {
-        summary: `AI Health Score hiện tại ở mức ${analytics.healthScore}/100, phản ánh chất lượng độ phủ, doanh số và mức độ kiểm soát địa bàn trong kỳ.`,
-        salesFocus: `Doanh số chuyến đi đạt ${formatVND(analytics.tripRevenue)}, doanh số dự kiến đạt ${formatVND(analytics.expectedRevenue)}, biến động ${formatPct(analytics.tripRevenueChange)} so với kỳ trước.`,
-        risksNarrative:
-          analytics.executiveWarnings[0] ||
-          "Một số chỉ số điều hành vẫn cần tiếp tục theo dõi để tránh suy giảm hiệu quả đội ngũ.",
-        opportunitiesNarrative:
-          analytics.executiveWins[0] ||
-          "Hệ thống đang ghi nhận các cơ hội cải thiện từ độ phủ thị trường và tối ưu doanh số.",
-        highlights: analytics.executiveWins,
-        warnings: analytics.executiveWarnings,
-        riskBullets: analytics.risks.map((item) =>
-          typeof item === "string"
-            ? item
-            : item?.title
-            ? `${item.title}${item?.reason ? `: ${item.reason}` : ""}`
-            : JSON.stringify(item)
-        ),
-        opportunityBullets: analytics.opportunities.map((item) =>
-          typeof item === "string"
-            ? item
-            : item?.title
-            ? `${item.title}${item?.reason ? `: ${item.reason}` : ""}`
-            : JSON.stringify(item)
-        ),
-        nextActions: analytics.suggestedActions,
-      },
-      topEmployees: analytics.topEmployees,
-      topAreas: analytics.topProvinces,
-      risks: analytics.risks.map((item) =>
-        typeof item === "string"
-          ? item
-          : item?.title
-          ? `${item.title}${item?.reason ? `: ${item.reason}` : ""}`
-          : JSON.stringify(item)
-      ),
-      opportunities: analytics.opportunities.map((item) =>
-        typeof item === "string"
-          ? item
-          : item?.title
-          ? `${item.title}${item?.reason ? `: ${item.reason}` : ""}`
-          : JSON.stringify(item)
-      ),
-      generatedBy: profile?.email || auth.currentUser?.email || "VP-PHARM AI Weekly Sales Intelligence",
+
+      weeklyReports: analytics.currentReports,
     });
   }
 
@@ -1138,7 +1163,9 @@ export default function Dashboard({
       <div id="ceo-brief">
         <SectionCard
           title="CEO Brief / Executive Brief"
-          subtitle={`Tóm tắt điều hành nhanh trong kỳ ${formatVNDate(analytics.from)} → ${formatVNDate(analytics.to)}`}
+          subtitle={`Tóm tắt điều hành nhanh trong kỳ ${formatVNDate(
+            analytics.from
+          )} → ${formatVNDate(analytics.to)}`}
           icon={<BriefcaseBusiness size={18} />}
         >
           <div className="grid two" style={{ marginBottom: 14 }}>
@@ -1349,10 +1376,7 @@ export default function Dashboard({
           subtitle="Các rủi ro nổi bật trong kỳ hiện tại"
           icon={<TriangleAlert size={18} />}
         >
-          <InsightList
-            items={analytics.risks}
-            emptyText="Chưa có cảnh báo rủi ro nào."
-          />
+          <InsightList items={analytics.risks} emptyText="Chưa có cảnh báo rủi ro nào." />
         </SectionCard>
 
         <SectionCard
