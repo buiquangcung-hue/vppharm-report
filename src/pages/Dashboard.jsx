@@ -16,6 +16,14 @@ import {
   Users,
   FileText,
   HandCoins,
+  CalendarRange,
+  Activity,
+  Target,
+  BriefcaseBusiness,
+  ShieldAlert,
+  CircleCheckBig,
+  Clock3,
+  Download,
 } from "lucide-react";
 import {
   BarChart,
@@ -25,7 +33,10 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  LineChart,
+  Line,
 } from "recharts";
+import { exportDashboardPDF } from "../utils/exportDashboardPDF";
 
 function formatVND(value) {
   const amount = Number(value || 0);
@@ -34,6 +45,12 @@ function formatVND(value) {
     currency: "VND",
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function formatPct(value) {
+  const num = Number(value || 0);
+  const sign = num > 0 ? "+" : "";
+  return `${sign}${num.toFixed(1)}%`;
 }
 
 function toMillis(value) {
@@ -76,7 +93,138 @@ function safeShortName(text = "", max = 18) {
   return str.length > max ? `${str.slice(0, max)}…` : str;
 }
 
-function KpiCard({ icon, title, value, sub }) {
+function startOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfDay(date) {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function diffDaysInclusive(from, to) {
+  const ms = endOfDay(to).getTime() - startOfDay(from).getTime();
+  return Math.max(1, Math.floor(ms / 86400000) + 1);
+}
+
+function fmtDateInput(date) {
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseReportDate(item) {
+  const raw =
+    item.weekFrom ||
+    item?.input?.weekFrom ||
+    item.createdAt?.toDate?.() ||
+    item.createdAt ||
+    null;
+
+  const d = raw instanceof Date ? raw : raw ? new Date(raw) : null;
+  if (!d || Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+function calcChange(current, previous) {
+  const cur = Number(current || 0);
+  const prev = Number(previous || 0);
+  if (prev === 0) {
+    if (cur === 0) return 0;
+    return 100;
+  }
+  return ((cur - prev) / prev) * 100;
+}
+
+function clamp(num, min, max) {
+  return Math.max(min, Math.min(max, num));
+}
+
+function sumBy(items, selector) {
+  return items.reduce((sum, item) => sum + Number(selector(item) || 0), 0);
+}
+
+function average(values) {
+  if (!values.length) return 0;
+  return values.reduce((s, v) => s + Number(v || 0), 0) / values.length;
+}
+
+function scoreColor(score) {
+  if (score >= 80) return "Tốt";
+  if (score >= 60) return "Theo dõi";
+  return "Cảnh báo";
+}
+
+function scoreTone(score) {
+  if (score >= 80) {
+    return {
+      bg: "rgba(34,197,94,.14)",
+      border: "rgba(34,197,94,.35)",
+      text: "#c9ffd9",
+      label: "XANH",
+    };
+  }
+  if (score >= 60) {
+    return {
+      bg: "rgba(245,158,11,.14)",
+      border: "rgba(245,158,11,.35)",
+      text: "#ffe8b3",
+      label: "VÀNG",
+    };
+  }
+  return {
+    bg: "rgba(239,68,68,.14)",
+    border: "rgba(239,68,68,.35)",
+    text: "#ffd0d0",
+    label: "ĐỎ",
+  };
+}
+
+function statusPill(level) {
+  if (level === "good") {
+    return {
+      text: "Tốt",
+      bg: "rgba(34,197,94,.14)",
+      border: "rgba(34,197,94,.35)",
+      color: "#c9ffd9",
+    };
+  }
+  if (level === "watch") {
+    return {
+      text: "Theo dõi",
+      bg: "rgba(245,158,11,.14)",
+      border: "rgba(245,158,11,.35)",
+      color: "#ffe8b3",
+    };
+  }
+  return {
+    text: "Cảnh báo",
+    bg: "rgba(239,68,68,.14)",
+    border: "rgba(239,68,68,.35)",
+    color: "#ffd0d0",
+  };
+}
+
+function classifyMetric(value, goodThreshold, watchThreshold) {
+  if (value >= goodThreshold) return "good";
+  if (value >= watchThreshold) return "watch";
+  return "alert";
+}
+
+function KpiCard({ icon, title, value, sub, change }) {
+  const hasChange = typeof change === "number" && Number.isFinite(change);
   return (
     <div
       style={{
@@ -88,13 +236,7 @@ function KpiCard({ icon, title, value, sub }) {
         gap: 10,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div
           style={{
             width: 38,
@@ -113,11 +255,10 @@ function KpiCard({ icon, title, value, sub }) {
 
       <div style={{ fontWeight: 900, fontSize: 24 }}>{value}</div>
 
-      {sub ? (
-        <div className="small" style={{ lineHeight: 1.5 }}>
-          {sub}
-        </div>
-      ) : null}
+      <div className="small" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {sub ? <span>{sub}</span> : null}
+        {hasChange ? <span className="kbd">{formatPct(change)}</span> : null}
+      </div>
     </div>
   );
 }
@@ -126,14 +267,7 @@ function SectionCard({ title, subtitle, icon, children }) {
   return (
     <div className="card" style={{ boxShadow: "none" }}>
       <div className="card-header">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginBottom: 6,
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           {icon ? (
             <div
               style={{
@@ -161,9 +295,7 @@ function SectionCard({ title, subtitle, icon, children }) {
 }
 
 function RankList({ items, emptyText, valueFormatter = (x) => x }) {
-  if (!items.length) {
-    return <div className="small">{emptyText}</div>;
-  }
+  if (!items.length) return <div className="small">{emptyText}</div>;
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
@@ -199,9 +331,7 @@ function RankList({ items, emptyText, valueFormatter = (x) => x }) {
 }
 
 function InsightList({ items, emptyText }) {
-  if (!items.length) {
-    return <div className="small">{emptyText}</div>;
-  }
+  if (!items.length) return <div className="small">{emptyText}</div>;
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
@@ -238,17 +368,11 @@ function ChartCard({ title, subtitle, data, dataKey = "value", valueFormatter })
         <ResponsiveContainer>
           <BarChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
             <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
-            <XAxis
-              dataKey="shortLabel"
-              stroke="rgba(255,255,255,.65)"
-              tick={{ fontSize: 12 }}
-            />
+            <XAxis dataKey="shortLabel" stroke="rgba(255,255,255,.65)" tick={{ fontSize: 12 }} />
             <YAxis
               stroke="rgba(255,255,255,.65)"
               tick={{ fontSize: 12 }}
-              tickFormatter={(v) =>
-                typeof valueFormatter === "function" ? valueFormatter(v) : v
-              }
+              tickFormatter={(v) => (typeof valueFormatter === "function" ? valueFormatter(v) : v)}
               width={90}
             />
             <Tooltip
@@ -271,6 +395,160 @@ function ChartCard({ title, subtitle, data, dataKey = "value", valueFormatter })
   );
 }
 
+function TrendCard({ data }) {
+  if (!data.length) {
+    return (
+      <SectionCard
+        title="Xu hướng doanh số theo tuần"
+        subtitle="Theo weekFrom của báo cáo"
+        icon={<TrendingUp size={18} />}
+      >
+        <div className="small">Chưa có dữ liệu xu hướng.</div>
+      </SectionCard>
+    );
+  }
+
+  return (
+    <SectionCard
+      title="Xu hướng doanh số theo tuần"
+      subtitle="Theo weekFrom của báo cáo"
+      icon={<TrendingUp size={18} />}
+    >
+      <div style={{ width: "100%", height: 320 }}>
+        <ResponsiveContainer>
+          <LineChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+            <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
+            <XAxis dataKey="label" stroke="rgba(255,255,255,.65)" tick={{ fontSize: 12 }} />
+            <YAxis
+              stroke="rgba(255,255,255,.65)"
+              tick={{ fontSize: 12 }}
+              tickFormatter={(v) => formatVND(v)}
+              width={90}
+            />
+            <Tooltip
+              formatter={(value) => formatVND(value)}
+              contentStyle={{
+                background: "#0f172a",
+                border: "1px solid rgba(255,255,255,.12)",
+                borderRadius: 12,
+                color: "#fff",
+              }}
+              labelStyle={{ color: "#fff" }}
+            />
+            <Line type="monotone" dataKey="value" strokeWidth={3} dot={{ r: 4 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </SectionCard>
+  );
+}
+
+function FilterButton({ active, children, onClick }) {
+  return (
+    <button
+      type="button"
+      className="btn secondary"
+      onClick={onClick}
+      style={{
+        opacity: active ? 1 : 0.82,
+        borderColor: active ? "rgba(20,184,166,.5)" : "rgba(255,255,255,.15)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function StatusPill({ level }) {
+  const tone = statusPill(level);
+  return (
+    <span
+      style={{
+        padding: "6px 10px",
+        borderRadius: 999,
+        background: tone.bg,
+        border: `1px solid ${tone.border}`,
+        color: tone.color,
+        fontSize: 12,
+        fontWeight: 700,
+      }}
+    >
+      {tone.text}
+    </span>
+  );
+}
+
+function ExecutiveItem({ title, value, level, sub }) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        borderRadius: 16,
+        background: "rgba(255,255,255,.05)",
+        border: "1px solid rgba(255,255,255,.10)",
+        display: "grid",
+        gap: 8,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+        <div className="small">{title}</div>
+        <StatusPill level={level} />
+      </div>
+      <div style={{ fontWeight: 900, fontSize: 22 }}>{value}</div>
+      {sub ? <div className="small">{sub}</div> : null}
+    </div>
+  );
+}
+
+function BriefList({ title, items, icon }) {
+  return (
+    <div
+      style={{
+        padding: 16,
+        borderRadius: 18,
+        background: "rgba(255,255,255,.05)",
+        border: "1px solid rgba(255,255,255,.10)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 10,
+          fontWeight: 900,
+          textTransform: "uppercase",
+          letterSpacing: 0.4,
+        }}
+      >
+        {icon}
+        <span>{title}</span>
+      </div>
+
+      {items.length ? (
+        <div style={{ display: "grid", gap: 10 }}>
+          {items.map((item, index) => (
+            <div
+              key={`${title}-${index}`}
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                background: "rgba(255,255,255,.05)",
+                border: "1px solid rgba(255,255,255,.08)",
+                lineHeight: 1.6,
+              }}
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="small">Chưa có dữ liệu.</div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard({
   isAdmin = false,
   isDirector = false,
@@ -279,6 +557,27 @@ export default function Dashboard({
   const [reports, setReports] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [error, setError] = useState("");
+  const [preset, setPreset] = useState("30d");
+
+  const today = useMemo(() => endOfDay(new Date()), []);
+  const initialFrom = useMemo(() => fmtDateInput(addDays(today, -29)), [today]);
+  const initialTo = useMemo(() => fmtDateInput(today), [today]);
+
+  const [fromDate, setFromDate] = useState(initialFrom);
+  const [toDate, setToDate] = useState(initialTo);
+
+  useEffect(() => {
+    if (preset === "7d") {
+      setFromDate(fmtDateInput(addDays(today, -6)));
+      setToDate(fmtDateInput(today));
+    } else if (preset === "30d") {
+      setFromDate(fmtDateInput(addDays(today, -29)));
+      setToDate(fmtDateInput(today));
+    } else if (preset === "90d") {
+      setFromDate(fmtDateInput(addDays(today, -89)));
+      setToDate(fmtDateInput(today));
+    }
+  }, [preset, today]);
 
   useEffect(() => {
     const currentUser = auth.currentUser;
@@ -287,7 +586,7 @@ export default function Dashboard({
     const reportsQuery = query(
       collection(db, "weekly_reports"),
       orderBy("createdAt", "desc"),
-      limit(300)
+      limit(500)
     );
 
     const employeesQuery = query(collection(db, "employees"), limit(500));
@@ -365,86 +664,233 @@ export default function Dashboard({
     };
   }, [isAdmin, isDirector, profile?.name]);
 
-  const summary = useMemo(() => {
-    const totalReports = reports.length;
-    const totalTripRevenue = reports.reduce(
-      (sum, r) => sum + Number(r.tripRevenue || 0),
-      0
-    );
-    const totalExpectedRevenue = reports.reduce(
-      (sum, r) => sum + Number(r.totalExpectedRevenue || 0),
-      0
-    );
-    const totalVisits = reports.reduce(
-      (sum, r) => sum + Number(r.visitCustomerCount || 0),
-      0
+  const analytics = useMemo(() => {
+    const from = fromDate ? startOfDay(new Date(fromDate)) : addDays(today, -29);
+    const to = toDate ? endOfDay(new Date(toDate)) : today;
+
+    const safeFrom = from.getTime() <= to.getTime() ? from : startOfDay(to);
+    const safeTo = to;
+
+    const days = diffDaysInclusive(safeFrom, safeTo);
+    const prevTo = endOfDay(addDays(safeFrom, -1));
+    const prevFrom = startOfDay(addDays(prevTo, -(days - 1)));
+
+    const currentReports = reports.filter((r) => {
+      const d = parseReportDate(r);
+      if (!d) return false;
+      const ts = d.getTime();
+      return ts >= safeFrom.getTime() && ts <= safeTo.getTime();
+    });
+
+    const previousReports = reports.filter((r) => {
+      const d = parseReportDate(r);
+      if (!d) return false;
+      const ts = d.getTime();
+      return ts >= prevFrom.getTime() && ts <= prevTo.getTime();
+    });
+
+    const buildTopMap = (list, getLabel) => {
+      const map = new Map();
+      for (const r of list) {
+        const label = getLabel(r);
+        map.set(label, (map.get(label) || 0) + Number(r.tripRevenue || 0));
+      }
+      return [...map.entries()]
+        .map(([label, value]) => ({
+          label,
+          shortLabel: safeShortName(label, 14),
+          value,
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5);
+    };
+
+    const currentTripRevenue = sumBy(currentReports, (r) => r.tripRevenue);
+    const prevTripRevenue = sumBy(previousReports, (r) => r.tripRevenue);
+
+    const currentExpectedRevenue = sumBy(currentReports, (r) => r.totalExpectedRevenue);
+    const prevExpectedRevenue = sumBy(previousReports, (r) => r.totalExpectedRevenue);
+
+    const currentVisits = sumBy(currentReports, (r) => r.visitCustomerCount);
+    const prevVisits = sumBy(previousReports, (r) => r.visitCustomerCount);
+
+    const coverageRates = currentReports.map((r) => {
+      const assigned = Number(r.assignedCustomerCount || 0);
+      const unexplored = Number(r.unexploredCustomerCount || 0);
+      if (assigned <= 0) return 0;
+      return ((assigned - unexplored) / assigned) * 100;
+    });
+
+    const productivityRates = currentReports.map((r) => {
+      const trip = Number(r.tripRevenue || 0);
+      const expected = Number(r.totalExpectedRevenue || 0);
+      if (expected <= 0) return 0;
+      return (trip / expected) * 100;
+    });
+
+    const marketControlRates = currentReports.map((r) => {
+      const assigned = Number(r.assignedCustomerCount || 0);
+      const total = Number(r.totalMarketCustomerCount || 0);
+      if (total <= 0) return 0;
+      return (assigned / total) * 100;
+    });
+
+    const coverageScore = clamp(average(coverageRates), 0, 100);
+    const salesQualityScore = clamp(average(productivityRates), 0, 100);
+    const marketExecutionScore = clamp(average(marketControlRates), 0, 100);
+    const healthScore = Math.round(
+      clamp(coverageScore * 0.35 + salesQualityScore * 0.4 + marketExecutionScore * 0.25, 0, 100)
     );
 
-    const employeeMap = new Map();
-    const provinceMap = new Map();
     const risks = [];
     const opportunities = [];
+    const actions = [];
 
-    for (const r of reports) {
-      const employeeName =
-        r.employeeName || r?.input?.employee?.name || "Chưa rõ nhân viên";
-      const province = r.province || r?.input?.province || "Chưa rõ địa bàn";
-
-      employeeMap.set(
-        employeeName,
-        (employeeMap.get(employeeName) || 0) + Number(r.tripRevenue || 0)
-      );
-      provinceMap.set(
-        province,
-        (provinceMap.get(province) || 0) + Number(r.tripRevenue || 0)
-      );
-
+    for (const r of currentReports) {
       const riskItems = Array.isArray(r.analysis_json?.risks)
         ? r.analysis_json.risks
         : r.analysis_json?.risks
         ? [r.analysis_json.risks]
         : [];
-
       const opportunityItems = Array.isArray(r.analysis_json?.opportunities)
         ? r.analysis_json.opportunities
         : r.analysis_json?.opportunities
         ? [r.analysis_json.opportunities]
         : [];
+      const actionItems = Array.isArray(
+        r.analysis_json?.nextWeekActions || r.analysis_json?.action_plan
+      )
+        ? r.analysis_json?.nextWeekActions || r.analysis_json?.action_plan
+        : r.analysis_json?.nextWeekActions || r.analysis_json?.action_plan
+        ? [r.analysis_json?.nextWeekActions || r.analysis_json?.action_plan]
+        : [];
 
       risks.push(...riskItems);
       opportunities.push(...opportunityItems);
+      actions.push(...actionItems);
     }
 
-    const topEmployees = [...employeeMap.entries()]
-      .map(([label, value]) => ({
-        label,
-        shortLabel: safeShortName(label, 14),
-        value,
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
+    const weekMap = new Map();
+    for (const r of currentReports) {
+      const key = String(r.weekFrom || r?.input?.weekFrom || "").slice(5, 10) || "N/A";
+      weekMap.set(key, (weekMap.get(key) || 0) + Number(r.tripRevenue || 0));
+    }
+    const trendData = [...weekMap.entries()].map(([label, value]) => ({ label, value }));
 
-    const topProvinces = [...provinceMap.entries()]
-      .map(([label, value]) => ({
-        label,
-        shortLabel: safeShortName(label, 14),
-        value,
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
+    const reportStatus = classifyMetric(currentReports.length, 6, 3);
+    const coverageStatus = classifyMetric(coverageScore, 75, 55);
+    const salesStatus = classifyMetric(salesQualityScore, 75, 55);
+    const marketStatus = classifyMetric(marketExecutionScore, 65, 45);
+
+    const topEmployee = buildTopMap(
+      currentReports,
+      (r) => r.employeeName || r?.input?.employee?.name || "Chưa rõ nhân viên"
+    )[0];
+    const topProvince = buildTopMap(
+      currentReports,
+      (r) => r.province || r?.input?.province || "Chưa rõ địa bàn"
+    )[0];
+
+    const executiveWins = [];
+    const executiveWarnings = [];
+    const executiveActions = [];
+
+    if (healthScore >= 80) {
+      executiveWins.push(`Sức khỏe điều hành đang ở mức tốt với AI Health Score ${healthScore}/100.`);
+    } else if (healthScore >= 60) {
+      executiveWarnings.push(`AI Health Score đang ở mức theo dõi: ${healthScore}/100.`);
+    } else {
+      executiveWarnings.push(`AI Health Score đang ở mức cảnh báo: ${healthScore}/100.`);
+    }
+
+    if (currentTripRevenue >= prevTripRevenue) {
+      executiveWins.push(`Doanh số chuyến đi đang ${currentTripRevenue > prevTripRevenue ? "tăng" : "giữ ổn định"} so với kỳ trước (${formatPct(calcChange(currentTripRevenue, prevTripRevenue))}).`);
+    } else {
+      executiveWarnings.push(`Doanh số chuyến đi giảm so với kỳ trước (${formatPct(calcChange(currentTripRevenue, prevTripRevenue))}).`);
+    }
+
+    if (topEmployee) {
+      executiveWins.push(`Nhân viên nổi bật nhất hiện tại là ${topEmployee.label} với doanh số ${formatVND(topEmployee.value)}.`);
+    }
+
+    if (topProvince) {
+      executiveWins.push(`Địa bàn dẫn đầu hiện tại là ${topProvince.label} với doanh số ${formatVND(topProvince.value)}.`);
+    }
+
+    if (coverageScore < 70) {
+      executiveActions.push("Ưu tiên nâng độ phủ khách hàng tại các địa bàn còn nhiều khách chưa khai thác.");
+    }
+
+    if (salesQualityScore < 70) {
+      executiveActions.push("Rà soát chênh lệch giữa doanh số chuyến đi và doanh số dự kiến để tối ưu chốt đơn.");
+    }
+
+    if (marketExecutionScore < 60) {
+      executiveActions.push("Đánh giá lại phân bổ khách hàng phụ trách so với tổng khách toàn địa bàn.");
+    }
+
+    const normalizedActions = actions
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          return (
+            item.title ||
+            item.name ||
+            item.label ||
+            item.suggested_action ||
+            item.description ||
+            JSON.stringify(item)
+          );
+        }
+        return "";
+      })
+      .filter(Boolean);
+
+    const suggestedActions = [...executiveActions, ...normalizedActions].slice(0, 3);
 
     return {
-      totalReports,
-      totalTripRevenue,
-      totalExpectedRevenue,
-      totalVisits,
+      from: safeFrom,
+      to: safeTo,
+      prevFrom,
+      prevTo,
+      days,
+      currentReports,
+      previousReports,
+      totalReports: currentReports.length,
+      tripRevenue: currentTripRevenue,
+      expectedRevenue: currentExpectedRevenue,
+      visits: currentVisits,
+      reportChange: calcChange(currentReports.length, previousReports.length),
+      tripRevenueChange: calcChange(currentTripRevenue, prevTripRevenue),
+      expectedRevenueChange: calcChange(currentExpectedRevenue, prevExpectedRevenue),
+      visitsChange: calcChange(currentVisits, prevVisits),
       employeeCount: employees.filter((x) => x.active !== false).length,
-      topEmployees,
-      topProvinces,
+      coverageScore: Math.round(coverageScore),
+      salesQualityScore: Math.round(salesQualityScore),
+      marketExecutionScore: Math.round(marketExecutionScore),
+      healthScore,
+      reportStatus,
+      coverageStatus,
+      salesStatus,
+      marketStatus,
+      topEmployees: buildTopMap(
+        currentReports,
+        (r) => r.employeeName || r?.input?.employee?.name || "Chưa rõ nhân viên"
+      ),
+      topProvinces: buildTopMap(
+        currentReports,
+        (r) => r.province || r?.input?.province || "Chưa rõ địa bàn"
+      ),
       risks: risks.slice(0, 6),
       opportunities: opportunities.slice(0, 6),
+      trendData,
+      executiveWins: executiveWins.slice(0, 3),
+      executiveWarnings: executiveWarnings.slice(0, 3),
+      suggestedActions,
     };
-  }, [reports, employees]);
+  }, [reports, employees, fromDate, toDate, today]);
+
+  const healthTone = scoreTone(analytics.healthScore);
 
   if (!isAdmin && !isDirector) {
     return (
@@ -470,6 +916,7 @@ export default function Dashboard({
               : "Tổng hợp dữ liệu báo cáo và phân tích AI của team phụ trách"}
           </p>
         </div>
+
         <div className="card-body">
           {error ? (
             <div
@@ -487,59 +934,263 @@ export default function Dashboard({
             </div>
           ) : null}
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 14,
-            }}
+          <SectionCard
+            title="Bộ lọc thời gian"
+            subtitle="Lọc dashboard theo giai đoạn và tự động so sánh với kỳ trước"
+            icon={<CalendarRange size={18} />}
           >
-            <KpiCard
-              icon={<FileText size={18} />}
-              title="Tổng số báo cáo"
-              value={summary.totalReports}
-              sub="Số báo cáo đang hiển thị theo quyền"
+            <div className="row" style={{ marginBottom: 12 }}>
+              <FilterButton active={preset === "7d"} onClick={() => setPreset("7d")}>
+                7 ngày
+              </FilterButton>
+              <FilterButton active={preset === "30d"} onClick={() => setPreset("30d")}>
+                30 ngày
+              </FilterButton>
+              <FilterButton active={preset === "90d"} onClick={() => setPreset("90d")}>
+                90 ngày
+              </FilterButton>
+              <FilterButton active={preset === "custom"} onClick={() => setPreset("custom")}>
+                Tùy chọn
+              </FilterButton>
+            </div>
+
+            <div className="grid two">
+              <div>
+                <label>Từ ngày</label>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => {
+                    setPreset("custom");
+                    setFromDate(e.target.value);
+                  }}
+                />
+              </div>
+              <div>
+                <label>Đến ngày</label>
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => {
+                    setPreset("custom");
+                    setToDate(e.target.value);
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="row" style={{ marginTop: 12 }}>
+              <span className="pill">
+                <span className="small">Kỳ hiện tại</span>{" "}
+                <span className="kbd">
+                  {fmtDateInput(analytics.from)} → {fmtDateInput(analytics.to)}
+                </span>
+              </span>
+              <span className="pill">
+                <span className="small">Kỳ trước</span>{" "}
+                <span className="kbd">
+                  {fmtDateInput(analytics.prevFrom)} → {fmtDateInput(analytics.prevTo)}
+                </span>
+              </span>
+              <span className="pill">
+                <span className="small">Độ dài kỳ</span>{" "}
+                <span className="kbd">{analytics.days} ngày</span>
+              </span>
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -4 }}>
+        <button
+          className="btn"
+          type="button"
+          onClick={exportDashboardPDF}
+          style={{ display: "flex", alignItems: "center", gap: 8 }}
+        >
+          <Download size={16} />
+          Xuất báo cáo PDF
+        </button>
+      </div>
+
+      <div id="ceo-brief">
+        <SectionCard
+          title="CEO Brief / Executive Brief"
+          subtitle="Tóm tắt điều hành nhanh từ dữ liệu báo cáo và phân tích AI"
+          icon={<BriefcaseBusiness size={18} />}
+        >
+          <div className="grid two" style={{ marginBottom: 14 }}>
+            <div
+              style={{
+                padding: 18,
+                borderRadius: 20,
+                background: healthTone.bg,
+                border: `1px solid ${healthTone.border}`,
+                color: healthTone.text,
+              }}
+            >
+              <div className="small" style={{ color: healthTone.text }}>
+                AI Health Score
+              </div>
+              <div style={{ fontWeight: 900, fontSize: 34, marginTop: 8 }}>
+                {analytics.healthScore}/100
+              </div>
+              <div style={{ marginTop: 8, fontWeight: 700 }}>
+                Trạng thái điều hành: {scoreColor(analytics.healthScore)}
+              </div>
+            </div>
+
+            <div className="grid two" style={{ gap: 12 }}>
+              <ExecutiveItem
+                title="Cường độ báo cáo"
+                value={analytics.totalReports}
+                level={analytics.reportStatus}
+                sub={`Biến động ${formatPct(analytics.reportChange)} so với kỳ trước`}
+              />
+              <ExecutiveItem
+                title="Độ phủ khách hàng"
+                value={`${analytics.coverageScore}/100`}
+                level={analytics.coverageStatus}
+                sub="Đánh giá từ assigned / unexplored"
+              />
+              <ExecutiveItem
+                title="Chất lượng doanh số"
+                value={`${analytics.salesQualityScore}/100`}
+                level={analytics.salesStatus}
+                sub="So sánh tripRevenue với totalExpectedRevenue"
+              />
+              <ExecutiveItem
+                title="Kiểm soát thị trường"
+                value={`${analytics.marketExecutionScore}/100`}
+                level={analytics.marketStatus}
+                sub="Tỷ lệ assignedCustomerCount trên totalMarketCustomerCount"
+              />
+            </div>
+          </div>
+
+          <div className="grid two">
+            <BriefList
+              title="Điểm tốt nổi bật"
+              items={analytics.executiveWins}
+              icon={<CircleCheckBig size={16} />}
             />
-            <KpiCard
-              icon={<Users size={18} />}
-              title="Tổng khách viếng thăm"
-              value={summary.totalVisits}
-              sub="Tổng lượt khách từ các báo cáo"
-            />
-            <KpiCard
-              icon={<HandCoins size={18} />}
-              title="Doanh số chuyến đi"
-              value={formatVND(summary.totalTripRevenue)}
-              sub="Cộng từ tripRevenue"
-            />
-            <KpiCard
-              icon={<TrendingUp size={18} />}
-              title="Doanh số dự kiến"
-              value={formatVND(summary.totalExpectedRevenue)}
-              sub="Cộng từ totalExpectedRevenue"
-            />
-            <KpiCard
-              icon={<Users size={18} />}
-              title="Nhân viên hoạt động"
-              value={summary.employeeCount}
-              sub="Danh mục nhân viên active"
+            <BriefList
+              title="Cảnh báo điều hành"
+              items={analytics.executiveWarnings}
+              icon={<ShieldAlert size={16} />}
             />
           </div>
-        </div>
+
+          <div style={{ marginTop: 14 }}>
+            <BriefList
+              title="Top 3 hành động đề xuất tuần tới"
+              items={analytics.suggestedActions}
+              icon={<Clock3 size={16} />}
+            />
+          </div>
+        </SectionCard>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 14,
+        }}
+      >
+        <KpiCard
+          icon={<FileText size={18} />}
+          title="Tổng số báo cáo"
+          value={analytics.totalReports}
+          sub="Theo bộ lọc hiện tại"
+          change={analytics.reportChange}
+        />
+        <KpiCard
+          icon={<Users size={18} />}
+          title="Tổng khách viếng thăm"
+          value={analytics.visits}
+          sub="Từ các báo cáo trong kỳ"
+          change={analytics.visitsChange}
+        />
+        <KpiCard
+          icon={<HandCoins size={18} />}
+          title="Doanh số chuyến đi"
+          value={formatVND(analytics.tripRevenue)}
+          sub="Cộng từ tripRevenue"
+          change={analytics.tripRevenueChange}
+        />
+        <KpiCard
+          icon={<TrendingUp size={18} />}
+          title="Doanh số dự kiến"
+          value={formatVND(analytics.expectedRevenue)}
+          sub="Cộng từ totalExpectedRevenue"
+          change={analytics.expectedRevenueChange}
+        />
+        <KpiCard
+          icon={<Users size={18} />}
+          title="Nhân viên hoạt động"
+          value={analytics.employeeCount}
+          sub="Danh mục nhân viên active"
+        />
+      </div>
+
+      <div className="grid two">
+        <SectionCard
+          title="AI Health Score"
+          subtitle="Điểm sức khỏe điều hành tổng hợp từ độ phủ, chất lượng doanh số và kiểm soát thị trường"
+          icon={<Activity size={18} />}
+        >
+          <div className="grid two">
+            <KpiCard
+              icon={<Target size={18} />}
+              title="Health Score"
+              value={`${analytics.healthScore}/100`}
+              sub={scoreColor(analytics.healthScore)}
+            />
+            <div
+              style={{
+                padding: 16,
+                background: "rgba(255,255,255,.06)",
+                borderRadius: 18,
+                border: "1px solid rgba(255,255,255,.10)",
+                display: "grid",
+                gap: 10,
+              }}
+            >
+              <div className="small">Chi tiết điểm</div>
+              <div className="row">
+                <span className="pill">
+                  <span className="small">Coverage</span>{" "}
+                  <span className="kbd">{analytics.coverageScore}/100</span>
+                </span>
+                <span className="pill">
+                  <span className="small">Sales Quality</span>{" "}
+                  <span className="kbd">{analytics.salesQualityScore}/100</span>
+                </span>
+                <span className="pill">
+                  <span className="small">Market Execution</span>{" "}
+                  <span className="kbd">{analytics.marketExecutionScore}/100</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+
+        <TrendCard data={analytics.trendData} />
       </div>
 
       <div className="grid two">
         <ChartCard
           title="Biểu đồ doanh số theo nhân viên"
-          subtitle="Top 5 nhân viên có doanh số chuyến đi cao nhất"
-          data={summary.topEmployees}
+          subtitle="Top 5 nhân viên có doanh số chuyến đi cao nhất trong kỳ"
+          data={analytics.topEmployees}
           valueFormatter={(v) => formatVND(v)}
         />
 
         <ChartCard
           title="Biểu đồ doanh số theo địa bàn"
-          subtitle="Top 5 địa bàn có doanh số chuyến đi cao nhất"
-          data={summary.topProvinces}
+          subtitle="Top 5 địa bàn có doanh số chuyến đi cao nhất trong kỳ"
+          data={analytics.topProvinces}
           valueFormatter={(v) => formatVND(v)}
         />
       </div>
@@ -547,11 +1198,11 @@ export default function Dashboard({
       <div className="grid two">
         <SectionCard
           title="Top nhân viên theo doanh số"
-          subtitle="Danh sách xếp hạng theo tripRevenue"
+          subtitle="Xếp hạng trong kỳ hiện tại"
           icon={<Users size={18} />}
         >
           <RankList
-            items={summary.topEmployees}
+            items={analytics.topEmployees}
             emptyText="Chưa có dữ liệu nhân viên."
             valueFormatter={formatVND}
           />
@@ -559,11 +1210,11 @@ export default function Dashboard({
 
         <SectionCard
           title="Top địa bàn theo doanh số"
-          subtitle="Danh sách xếp hạng theo tripRevenue"
+          subtitle="Xếp hạng trong kỳ hiện tại"
           icon={<MapPinned size={18} />}
         >
           <RankList
-            items={summary.topProvinces}
+            items={analytics.topProvinces}
             emptyText="Chưa có dữ liệu địa bàn."
             valueFormatter={formatVND}
           />
@@ -573,22 +1224,22 @@ export default function Dashboard({
       <div className="grid two">
         <SectionCard
           title="Cảnh báo rủi ro từ AI"
-          subtitle="Các rủi ro nổi bật được AI trích xuất từ báo cáo"
+          subtitle="Các rủi ro nổi bật trong kỳ hiện tại"
           icon={<TriangleAlert size={18} />}
         >
           <InsightList
-            items={summary.risks}
+            items={analytics.risks}
             emptyText="Chưa có cảnh báo rủi ro nào."
           />
         </SectionCard>
 
         <SectionCard
           title="Cơ hội nổi bật từ AI"
-          subtitle="Các cơ hội nổi bật được AI gợi ý từ báo cáo"
+          subtitle="Các cơ hội nổi bật trong kỳ hiện tại"
           icon={<Lightbulb size={18} />}
         >
           <InsightList
-            items={summary.opportunities}
+            items={analytics.opportunities}
             emptyText="Chưa có cơ hội nổi bật nào."
           />
         </SectionCard>
