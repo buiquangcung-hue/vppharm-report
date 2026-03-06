@@ -13,6 +13,7 @@ const LOGO_URL =
   "https://firebasestorage.googleapis.com/v0/b/cnlb-4d714.firebasestorage.app/o/lOGO%20DOC.png?alt=media&token=ad7d71e2-aa27-4ed5-81d8-9f8ee9ace0ac";
 
 const ADMIN_EMAIL = "buiquangcung@gmail.com";
+const ADMIN_PHONE = "0946 429 099";
 
 export default function App() {
   const [tab, setTab] = useState("weekly");
@@ -22,7 +23,11 @@ export default function App() {
 
   const [ready, setReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [approval, setApproval] = useState({ approved: false, blocked: false, role: "pending" });
+  const [approval, setApproval] = useState({
+    approved: false,
+    blocked: false,
+    role: "pending",
+  });
 
   const [notice, setNotice] = useState({
     open: false,
@@ -69,6 +74,7 @@ export default function App() {
           await setDoc(ref, {
             email: u.email || null,
             role: "pending",
+            status: "pending",
             approved: false,
             blocked: false,
             createdAt: serverTimestamp(),
@@ -76,7 +82,7 @@ export default function App() {
           });
         }
 
-        const snap2 = snap.exists() ? snap : await getDoc(ref);
+        const snap2 = await getDoc(ref);
         const profile = snap2.data() || {};
 
         if ((u.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
@@ -88,9 +94,9 @@ export default function App() {
             {
               email: u.email || null,
               role: "admin",
+              status: "active",
               approved: true,
               blocked: false,
-              status: "active",
               approvedAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             },
@@ -113,6 +119,7 @@ export default function App() {
         });
 
         if (blocked) {
+          setAuthOpen(false);
           showNotice(
             "Tài khoản bị chặn",
             "Tài khoản của bạn hiện đã bị chặn.\nVui lòng liên hệ Admin để được hỗ trợ.",
@@ -125,9 +132,10 @@ export default function App() {
         }
 
         if (!approved) {
+          setAuthOpen(false);
           showNotice(
-            "Đang chờ phê duyệt",
-            "Tài khoản của bạn đã được tạo thành công nhưng đang chờ Admin duyệt.\nVui lòng quay lại sau.",
+            "Đang chờ duyệt",
+            `Tài khoản của bạn đang ở trạng thái chờ duyệt, gọi hoặc nhắn tin Zalo cho admin theo số điện thoại sau: ${ADMIN_PHONE}`,
             "warning"
           );
           await signOut(auth);
@@ -181,28 +189,32 @@ export default function App() {
 
           <div className="row">
             <div className="pill">
-              <span className="small">User:</span> <span className="kbd">{userEmail}</span>
+              <span className="small">User:</span>{" "}
+              <span className="kbd">{userEmail}</span>
             </div>
 
             {showApp ? (
               <>
-                <button className="btn secondary" onClick={() => setTab("weekly")}>
+                <button className="btn secondary" type="button" onClick={() => setTab("weekly")}>
                   Weekly
                 </button>
-                <button className="btn secondary" onClick={() => setTab("reports")}>
+
+                <button className="btn secondary" type="button" onClick={() => setTab("reports")}>
                   Reports
                 </button>
+
                 {isAdmin ? (
-                  <button className="btn secondary" onClick={() => setTab("admin")}>
+                  <button className="btn secondary" type="button" onClick={() => setTab("admin")}>
                     Admin
                   </button>
                 ) : null}
-                <button className="btn secondary" onClick={logout}>
+
+                <button className="btn secondary" type="button" onClick={logout}>
                   Đăng xuất
                 </button>
               </>
             ) : (
-              <button className="btn" onClick={() => setAuthOpen(true)}>
+              <button className="btn" type="button" onClick={() => setAuthOpen(true)}>
                 Đăng nhập
               </button>
             )}
@@ -218,12 +230,15 @@ export default function App() {
               <p className="small">
                 Vui lòng đăng nhập. Tài khoản mới cần Admin duyệt trước khi sử dụng.
               </p>
-              <button className="btn" onClick={() => setAuthOpen(true)}>
+              <button className="btn" type="button" onClick={() => setAuthOpen(true)}>
                 Mở đăng nhập
               </button>
               <div className="hr" />
               <div className="small">
                 Admin: <span className="kbd">{ADMIN_EMAIL}</span>
+              </div>
+              <div className="small" style={{ marginTop: 6 }}>
+                Số điện thoại / Zalo: <span className="kbd">{ADMIN_PHONE}</span>
               </div>
             </div>
           </div>
@@ -232,7 +247,10 @@ export default function App() {
         ) : tab === "reports" ? (
           <Reports isAdmin={isAdmin} />
         ) : (
-          <Admin adminEmail={ADMIN_EMAIL} />
+          <Admin
+            adminEmail={ADMIN_EMAIL}
+            onNotify={(title, message, type) => showNotice(title, message, type)}
+          />
         )}
       </div>
 

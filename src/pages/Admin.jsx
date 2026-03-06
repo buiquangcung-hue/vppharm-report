@@ -7,11 +7,11 @@ import {
   query,
   where,
   doc,
-  updateDoc,
+  setDoc,
   serverTimestamp,
 } from "firebase/firestore";
 
-export default function Admin({ adminEmail }) {
+export default function Admin({ adminEmail, onNotify }) {
   const [pending, setPending] = useState([]);
   const [approved, setApproved] = useState([]);
   const [blocked, setBlocked] = useState([]);
@@ -22,7 +22,12 @@ export default function Admin({ adminEmail }) {
     const col = collection(db, "users");
 
     const unsubPending = onSnapshot(
-      query(col, where("approved", "==", false), where("blocked", "==", false), orderBy("createdAt", "desc")),
+      query(
+        col,
+        where("approved", "==", false),
+        where("blocked", "==", false),
+        orderBy("createdAt", "desc")
+      ),
       (snap) => setPending(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
       (e) => setErr(String(e?.message || e))
     );
@@ -56,57 +61,122 @@ export default function Admin({ adminEmail }) {
   );
 
   async function approveUser(u) {
-    await updateDoc(doc(db, "users", u.id), {
-      approved: true,
-      blocked: false,
-      status: "active",
-      role: u.email === adminEmail ? "admin" : "user",
-      approvedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      await setDoc(
+        doc(db, "users", u.id),
+        {
+          approved: true,
+          blocked: false,
+          status: "active",
+          role: u.email === adminEmail ? "admin" : "user",
+          approvedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      onNotify?.(
+        "Duyệt tài khoản thành công",
+        `Đã cấp quyền truy cập cho ${u.name || u.email || "user"}.`,
+        "success"
+      );
+    } catch (e) {
+      console.error("approveUser error:", e);
+      onNotify?.(
+        "Duyệt tài khoản thất bại",
+        String(e?.message || e),
+        "error"
+      );
+    }
   }
 
   async function blockUser(u) {
-    await updateDoc(doc(db, "users", u.id), {
-      approved: false,
-      blocked: true,
-      status: "blocked",
-      role: "blocked",
-      blockedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      await setDoc(
+        doc(db, "users", u.id),
+        {
+          approved: false,
+          blocked: true,
+          status: "blocked",
+          role: "blocked",
+          blockedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      onNotify?.(
+        "Đã chặn tài khoản",
+        `${u.name || u.email || "User"} đã bị chặn.`,
+        "warning"
+      );
+    } catch (e) {
+      console.error("blockUser error:", e);
+      onNotify?.(
+        "Chặn tài khoản thất bại",
+        String(e?.message || e),
+        "error"
+      );
+    }
   }
 
   async function unblockUser(u) {
-    await updateDoc(doc(db, "users", u.id), {
-      approved: false,
-      blocked: false,
-      status: "pending",
-      role: "pending",
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      await setDoc(
+        doc(db, "users", u.id),
+        {
+          approved: false,
+          blocked: false,
+          status: "pending",
+          role: "pending",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      onNotify?.(
+        "Đã mở lại tài khoản",
+        `${u.name || u.email || "User"} đã được chuyển về trạng thái chờ duyệt.`,
+        "info"
+      );
+    } catch (e) {
+      console.error("unblockUser error:", e);
+      onNotify?.(
+        "Mở lại tài khoản thất bại",
+        String(e?.message || e),
+        "error"
+      );
+    }
   }
 
   const UserCard = ({ u, actions }) => (
     <div className="card" style={{ boxShadow: "none" }}>
       <div className="card-body">
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div
+          className="row"
+          style={{ justifyContent: "space-between", alignItems: "flex-start" }}
+        >
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 900, fontSize: 16 }}>
               {u.name || "(Chưa có tên)"}
             </div>
+
             <div className="small" style={{ marginTop: 6 }}>
               Email: <span className="kbd">{u.email || ""}</span>
             </div>
+
             <div className="small" style={{ marginTop: 4 }}>
               Bộ phận: <span className="kbd">{u.department || ""}</span>
             </div>
+
             <div className="small" style={{ marginTop: 4 }}>
               Số điện thoại: <span className="kbd">{u.phone || ""}</span>
             </div>
+
             <div className="small" style={{ marginTop: 4 }}>
               UID: <span className="kbd">{u.id}</span>
             </div>
+
             <div className="small" style={{ marginTop: 8 }}>
               role: <span className="kbd">{u.role || "pending"}</span> · status:{" "}
               <span className="kbd">{u.status || ""}</span>
@@ -128,11 +198,25 @@ export default function Admin({ adminEmail }) {
         </div>
         <div className="card-body">
           <div className="row">
-            <span className="pill"><span className="small">Pending</span> <span className="kbd">{counts.pending}</span></span>
-            <span className="pill"><span className="small">Approved</span> <span className="kbd">{counts.approved}</span></span>
-            <span className="pill"><span className="small">Blocked</span> <span className="kbd">{counts.blocked}</span></span>
+            <span className="pill">
+              <span className="small">Pending</span>{" "}
+              <span className="kbd">{counts.pending}</span>
+            </span>
+            <span className="pill">
+              <span className="small">Approved</span>{" "}
+              <span className="kbd">{counts.approved}</span>
+            </span>
+            <span className="pill">
+              <span className="small">Blocked</span>{" "}
+              <span className="kbd">{counts.blocked}</span>
+            </span>
           </div>
-          {err ? <div className="small" style={{ marginTop: 10 }}>Lỗi: {err}</div> : null}
+
+          {err ? (
+            <div className="small" style={{ marginTop: 10 }}>
+              Lỗi: {err}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -152,10 +236,19 @@ export default function Admin({ adminEmail }) {
                   u={u}
                   actions={
                     <>
-                      <button className="btn secondary" onClick={() => approveUser(u)}>
+                      <button
+                        className="btn secondary"
+                        type="button"
+                        onClick={() => approveUser(u)}
+                      >
                         Approve
                       </button>
-                      <button className="btn secondary" onClick={() => blockUser(u)}>
+
+                      <button
+                        className="btn secondary"
+                        type="button"
+                        onClick={() => blockUser(u)}
+                      >
                         Block
                       </button>
                     </>
@@ -181,9 +274,15 @@ export default function Admin({ adminEmail }) {
                   u={u}
                   actions={
                     u.email === adminEmail ? (
-                      <span className="pill"><span className="small">ADMIN</span></span>
+                      <span className="pill">
+                        <span className="small">ADMIN</span>
+                      </span>
                     ) : (
-                      <button className="btn secondary" onClick={() => blockUser(u)}>
+                      <button
+                        className="btn secondary"
+                        type="button"
+                        onClick={() => blockUser(u)}
+                      >
                         Block
                       </button>
                     )
@@ -209,7 +308,11 @@ export default function Admin({ adminEmail }) {
                 key={u.id}
                 u={u}
                 actions={
-                  <button className="btn secondary" onClick={() => unblockUser(u)}>
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={() => unblockUser(u)}
+                  >
                     Unblock → Pending
                   </button>
                 }
