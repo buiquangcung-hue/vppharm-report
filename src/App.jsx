@@ -49,6 +49,20 @@ export default function App() {
     setNotice((prev) => ({ ...prev, open: false }));
   }
 
+  function goTab(nextTab) {
+    if (!authed) {
+      setAuthOpen(true);
+      return;
+    }
+
+    if (nextTab === "admin" && !isAdmin) {
+      setTab("weekly");
+      return;
+    }
+
+    setTab(nextTab);
+  }
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       try {
@@ -59,6 +73,7 @@ export default function App() {
           setUserEmail("Chưa đăng nhập");
           setIsAdmin(false);
           setApproval({ approved: false, blocked: false, role: "pending" });
+          setTab("weekly");
           setAuthOpen(true);
           setReady(true);
           return;
@@ -103,6 +118,7 @@ export default function App() {
             { merge: true }
           );
 
+          setTab("weekly");
           setAuthOpen(false);
           setReady(true);
           return;
@@ -119,6 +135,7 @@ export default function App() {
         });
 
         if (blocked) {
+          setTab("weekly");
           setAuthOpen(false);
           showNotice(
             "Tài khoản bị chặn",
@@ -132,6 +149,7 @@ export default function App() {
         }
 
         if (!approved) {
+          setTab("weekly");
           setAuthOpen(false);
           showNotice(
             "Đang chờ duyệt",
@@ -144,9 +162,12 @@ export default function App() {
           return;
         }
 
+        // User thường đăng nhập thành công -> luôn vào Weekly
+        setTab("weekly");
         setAuthOpen(false);
         setReady(true);
       } catch (e) {
+        setTab("weekly");
         showNotice("Có lỗi xảy ra", String(e?.message || e), "error");
         setReady(true);
       }
@@ -157,6 +178,7 @@ export default function App() {
 
   async function logout() {
     await signOut(auth);
+    setTab("weekly");
     setAuthOpen(true);
     showNotice("Đăng xuất thành công", "Bạn đã đăng xuất khỏi hệ thống.", "success");
   }
@@ -195,16 +217,16 @@ export default function App() {
 
             {showApp ? (
               <>
-                <button className="btn secondary" type="button" onClick={() => setTab("weekly")}>
+                <button className="btn secondary" type="button" onClick={() => goTab("weekly")}>
                   Weekly
                 </button>
 
-                <button className="btn secondary" type="button" onClick={() => setTab("reports")}>
+                <button className="btn secondary" type="button" onClick={() => goTab("reports")}>
                   Reports
                 </button>
 
                 {isAdmin ? (
-                  <button className="btn secondary" type="button" onClick={() => setTab("admin")}>
+                  <button className="btn secondary" type="button" onClick={() => goTab("admin")}>
                     Admin
                   </button>
                 ) : null}
@@ -242,15 +264,20 @@ export default function App() {
               </div>
             </div>
           </div>
-        ) : tab === "weekly" ? (
-          <Weekly />
         ) : tab === "reports" ? (
           <Reports isAdmin={isAdmin} />
+        ) : tab === "admin" ? (
+          isAdmin ? (
+            <Admin
+              adminEmail={ADMIN_EMAIL}
+              isAdmin={isAdmin}
+              onNotify={(title, message, type) => showNotice(title, message, type)}
+            />
+          ) : (
+            <Weekly />
+          )
         ) : (
-          <Admin
-            adminEmail={ADMIN_EMAIL}
-            onNotify={(title, message, type) => showNotice(title, message, type)}
-          />
+          <Weekly />
         )}
       </div>
 

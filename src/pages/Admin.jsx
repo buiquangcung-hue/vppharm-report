@@ -8,11 +8,13 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
-export default function Admin({ adminEmail, onNotify }) {
+export default function Admin({ adminEmail, isAdmin, onNotify }) {
   const [users, setUsers] = useState([]);
   const [err, setErr] = useState("");
 
   useEffect(() => {
+    if (!isAdmin) return;
+
     setErr("");
     const col = collection(db, "users");
 
@@ -28,7 +30,7 @@ export default function Admin({ adminEmail, onNotify }) {
     return () => {
       unsubUsers();
     };
-  }, []);
+  }, [isAdmin]);
 
   const pending = useMemo(() => {
     return users
@@ -58,6 +60,8 @@ export default function Admin({ adminEmail, onNotify }) {
   );
 
   async function approveUser(u) {
+    if (!isAdmin) return;
+
     try {
       await setDoc(
         doc(db, "users", u.id),
@@ -65,7 +69,10 @@ export default function Admin({ adminEmail, onNotify }) {
           approved: true,
           blocked: false,
           status: "active",
-          role: u.email === adminEmail ? "admin" : "user",
+          role:
+            (u.email || "").toLowerCase() === (adminEmail || "").toLowerCase()
+              ? "admin"
+              : "user",
           approvedAt: serverTimestamp(),
           blockedAt: null,
           updatedAt: serverTimestamp(),
@@ -89,6 +96,8 @@ export default function Admin({ adminEmail, onNotify }) {
   }
 
   async function blockUser(u) {
+    if (!isAdmin) return;
+
     try {
       await setDoc(
         doc(db, "users", u.id),
@@ -119,6 +128,8 @@ export default function Admin({ adminEmail, onNotify }) {
   }
 
   async function unblockUser(u) {
+    if (!isAdmin) return;
+
     try {
       await setDoc(
         doc(db, "users", u.id),
@@ -147,6 +158,10 @@ export default function Admin({ adminEmail, onNotify }) {
         "error"
       );
     }
+  }
+
+  if (!isAdmin) {
+    return null;
   }
 
   const UserCard = ({ u, actions }) => (
@@ -273,7 +288,8 @@ export default function Admin({ adminEmail, onNotify }) {
                   key={u.id}
                   u={u}
                   actions={
-                    u.email === adminEmail ? (
+                    (u.email || "").toLowerCase() ===
+                    (adminEmail || "").toLowerCase() ? (
                       <span className="pill">
                         <span className="small">ADMIN</span>
                       </span>
