@@ -3,8 +3,6 @@ import { db } from "../firebase.js";
 import {
   collection,
   onSnapshot,
-  orderBy,
-  query,
   doc,
   setDoc,
   serverTimestamp,
@@ -19,7 +17,7 @@ export default function Admin({ adminEmail, onNotify }) {
     const col = collection(db, "users");
 
     const unsubUsers = onSnapshot(
-      query(col, orderBy("createdAt", "desc")),
+      col,
       (snap) => {
         const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setUsers(rows);
