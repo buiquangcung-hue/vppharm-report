@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { db, auth, storage } from "../firebase.js";
 import {
   addDoc,
@@ -351,6 +351,11 @@ export default function Weekly({
   const [savedId, setSavedId] = useState("");
   const [error, setError] = useState("");
 
+  const [progressText, setProgressText] = useState("");
+  const [progressPercent, setProgressPercent] = useState(0);
+
+  const progressIntervalRef = useRef(null);
+
   useEffect(() => {
     let mounted = true;
 
@@ -430,6 +435,14 @@ export default function Weekly({
       mounted = false;
     };
   }, [isAdmin, isDirector, profile?.name]);
+
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, []);
 
   const reportName = useMemo(
     () => buildWeeklyReportName(form.weekFrom, form.employeeName),
@@ -518,8 +531,48 @@ export default function Weekly({
     }));
   }
 
+  function startFakeProgress() {
+    const progressSteps = [
+      { text: "Đang tải file Excel lên hệ thống...", percent: 12 },
+      { text: "Đang chuẩn hóa dữ liệu chuyến đi...", percent: 22 },
+      { text: "Đang gửi dữ liệu sang AI phân tích...", percent: 36 },
+      { text: "Đang đọc dữ liệu báo cáo tuần...", percent: 48 },
+      { text: "Đang đánh giá độ phủ thị trường...", percent: 60 },
+      { text: "Đang phân tích doanh số và cơ hội...", percent: 72 },
+      { text: "Đang tổng hợp nhận định quản lý...", percent: 84 },
+      { text: "Đang hoàn thiện kết quả AI...", percent: 92 },
+    ];
+
+    let step = 0;
+    setProgressText(progressSteps[0].text);
+    setProgressPercent(progressSteps[0].percent);
+
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+    }
+
+    progressIntervalRef.current = setInterval(() => {
+      step += 1;
+      const currentStep = progressSteps[Math.min(step, progressSteps.length - 1)];
+      setProgressText(currentStep.text);
+      setProgressPercent(currentStep.percent);
+    }, 2500);
+  }
+
+  function stopFakeProgress() {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+  }
+
   async function submitReport(event) {
     event?.preventDefault?.();
+
+    if (loading) return;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
 
     try {
       setLoading(true);
@@ -527,6 +580,8 @@ export default function Weekly({
       setError("");
       setAnalysisText("");
       setAnalysisJson(null);
+      setProgressText("");
+      setProgressPercent(0);
 
       const user = auth.currentUser;
       if (!user) throw new Error("Bạn chưa đăng nhập.");
@@ -605,6 +660,9 @@ export default function Weekly({
         throw new Error("Vui lòng tải lên file báo cáo doanh số tuần.");
       }
 
+      setProgressText("Đang tải file Excel lên hệ thống...");
+      setProgressPercent(10);
+
       const excelFileMeta = await uploadWeeklyExcel(
         form.excelFile,
         user.uid,
@@ -654,6 +712,10 @@ export default function Weekly({
         excelFile: excelFileMeta,
       };
 
+      startFakeProgress();
+
+      console.time("analyzeWeeklyReport");
+
       const res = await fetch("/api/analyzeWeeklyReport", {
         method: "POST",
         headers: {
@@ -662,12 +724,19 @@ export default function Weekly({
         body: JSON.stringify({
           report: reportPayload,
         }),
+        signal: controller.signal,
       });
+
+      console.timeEnd("analyzeWeeklyReport");
+
+      stopFakeProgress();
+      setProgressText("Đang xử lý kết quả AI...");
+      setProgressPercent(96);
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(data?.error || "API error");
+        throw new Error(data?.error || data?.detail || data?.message || "API error");
       }
 
       const aJson = data.analysis_json || null;
@@ -676,6 +745,9 @@ export default function Weekly({
 
       setAnalysisJson(aJson);
       setAnalysisText(prettyText);
+
+      setProgressText("Đang lưu báo cáo vào hệ thống...");
+      setProgressPercent(98);
 
       const docRef = await addDoc(collection(db, "weekly_reports"), {
         reportName,
@@ -718,6 +790,9 @@ export default function Weekly({
         updatedAt: serverTimestamp(),
       });
 
+      setProgressText("Hoàn tất phân tích và lưu trữ báo cáo.");
+      setProgressPercent(100);
+
       setSavedId(docRef.id);
       onNotify?.(
         "Đã lưu báo cáo",
@@ -725,12 +800,29 @@ export default function Weekly({
         "success"
       );
     } catch (e) {
-      const msg = String(e?.message || e);
+      stopFakeProgress();
+
+      const msg =
+        e?.name === "AbortError"
+          ? "AI xử lý quá lâu, hệ thống đã tự dừng sau 45 giây. Có thể API đang treo, prompt quá dài hoặc server đang chậm."
+          : String(e?.message || e);
+
       setError(msg);
       setAnalysisText(`Lỗi: ${msg}`);
+      setProgressText("");
+      setProgressPercent(0);
+
       onNotify?.("Lưu báo cáo thất bại", msg, "error");
     } finally {
+      clearTimeout(timeoutId);
+      stopFakeProgress();
+
       setLoading(false);
+
+      setTimeout(() => {
+        setProgressText("");
+        setProgressPercent(0);
+      }, 1200);
     }
   }
 
@@ -837,6 +929,7 @@ export default function Weekly({
                       required
                       value={form.weekFrom}
                       onChange={(e) => updateField("weekFrom", e.target.value)}
+                      disabled={loading}
                     />
                   </div>
 
@@ -847,6 +940,7 @@ export default function Weekly({
                       required
                       value={form.weekTo}
                       onChange={(e) => updateField("weekTo", e.target.value)}
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -858,6 +952,7 @@ export default function Weekly({
                       required
                       value={form.employeeUid}
                       onChange={(e) => handleEmployeeChange(e.target.value)}
+                      disabled={loading}
                     >
                       <option value="">-- Chọn nhân viên --</option>
                       {employees.map((emp) => (
@@ -879,6 +974,7 @@ export default function Weekly({
                       required
                       value={form.province}
                       onChange={(e) => updateField("province", e.target.value)}
+                      disabled={loading}
                     >
                       <option value="">-- Chọn tỉnh / thành --</option>
                       {provinces.map((p) => (
@@ -929,6 +1025,7 @@ export default function Weekly({
                       required
                       value={form.visitCustomerCount}
                       onChange={(e) => updateField("visitCustomerCount", e.target.value)}
+                      disabled={loading}
                     />
                   </div>
 
@@ -940,6 +1037,7 @@ export default function Weekly({
                       required
                       value={form.tripRevenue}
                       onChange={(e) => updateField("tripRevenue", e.target.value)}
+                      disabled={loading}
                     />
                     <div className="small" style={{ marginTop: 6 }}>
                       {formatVND(form.tripRevenue || 0)}
@@ -958,6 +1056,7 @@ export default function Weekly({
                       onChange={(e) =>
                         updateField("assignedCustomerCount", e.target.value)
                       }
+                      disabled={loading}
                     />
                   </div>
 
@@ -971,6 +1070,7 @@ export default function Weekly({
                       onChange={(e) =>
                         updateField("unexploredCustomerCount", e.target.value)
                       }
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -985,6 +1085,7 @@ export default function Weekly({
                     onChange={(e) =>
                       updateField("totalMarketCustomerCount", e.target.value)
                     }
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -1004,6 +1105,7 @@ export default function Weekly({
                   value={form.employeeStrengths}
                   onChange={(e) => updateField("employeeStrengths", e.target.value)}
                   placeholder="Ví dụ: chủ động mở rộng điểm bán, giao tiếp khách hàng tốt, nắm sản phẩm tốt..."
+                  disabled={loading}
                 />
 
                 <FieldLabel required>Điểm yếu của nhân viên trong chuyến đi</FieldLabel>
@@ -1013,6 +1115,7 @@ export default function Weekly({
                   value={form.employeeWeaknesses}
                   onChange={(e) => updateField("employeeWeaknesses", e.target.value)}
                   placeholder="Ví dụ: theo dõi sau bán chưa sát, chưa chốt được nhóm khách hàng mới..."
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -1030,6 +1133,7 @@ export default function Weekly({
                     <select
                       value={selectedProductId}
                       onChange={(e) => setSelectedProductId(e.target.value)}
+                      disabled={loading}
                     >
                       <option value="">-- Chọn mặt hàng --</option>
                       {products.map((p) => (
@@ -1046,6 +1150,7 @@ export default function Weekly({
                       type="button"
                       onClick={addSelectedProduct}
                       style={{ minWidth: 180 }}
+                      disabled={loading}
                     >
                       Thêm mặt hàng
                     </button>
@@ -1099,6 +1204,7 @@ export default function Weekly({
                                   onChange={(e) =>
                                     updateProductLineQuantity(index, e.target.value)
                                   }
+                                  disabled={loading}
                                 />
                               </div>
 
@@ -1114,6 +1220,7 @@ export default function Weekly({
                                   className="btn secondary"
                                   type="button"
                                   onClick={() => removeProductLine(index)}
+                                  disabled={loading}
                                 >
                                   Xóa mặt hàng
                                 </button>
@@ -1156,6 +1263,7 @@ export default function Weekly({
                   type="file"
                   accept=".xlsx,.xls"
                   onChange={(e) => updateField("excelFile", e.target.files?.[0] || null)}
+                  disabled={loading}
                 />
                 <div className="small" style={{ marginTop: 8 }}>
                   {form.excelFile
@@ -1182,11 +1290,69 @@ export default function Weekly({
                   minWidth: 320,
                   textTransform: "uppercase",
                   letterSpacing: 0.4,
+                  opacity: loading ? 0.85 : 1,
+                  cursor: loading ? "not-allowed" : "pointer",
                 }}
               >
-                {loading ? "AI đang phân tích..." : "PHÂN TÍCH BÁO CÁO VÀ LƯU TRỮ"}
+                {loading ? "AI ĐANG PHÂN TÍCH..." : "PHÂN TÍCH BÁO CÁO VÀ LƯU TRỮ"}
               </button>
             </div>
+
+            {loading ? (
+              <div
+                style={{
+                  marginTop: 6,
+                  padding: 16,
+                  borderRadius: 18,
+                  border: "1px solid rgba(255,255,255,.10)",
+                  background: "rgba(255,255,255,.05)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    marginBottom: 10,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ fontWeight: 800 }}>AI đang xử lý báo cáo</div>
+                  <div className="small">{progressPercent}%</div>
+                </div>
+
+                <div
+                  style={{
+                    width: "100%",
+                    height: 10,
+                    background: "rgba(255,255,255,.08)",
+                    borderRadius: 999,
+                    overflow: "hidden",
+                    marginBottom: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.max(6, progressPercent)}%`,
+                      height: "100%",
+                      borderRadius: 999,
+                      transition: "width .6s ease",
+                      background:
+                        "linear-gradient(90deg, rgba(59,130,246,0.95), rgba(16,185,129,0.95))",
+                    }}
+                  />
+                </div>
+
+                <div className="small" style={{ lineHeight: 1.6 }}>
+                  {progressText || "Hệ thống đang xử lý..."}
+                </div>
+
+                <div className="small" style={{ marginTop: 8, opacity: 0.8 }}>
+                  Hệ thống sẽ tự dừng nếu xử lý quá 45 giây để tránh treo vô hạn.
+                </div>
+              </div>
+            ) : null}
           </form>
         </div>
       </div>

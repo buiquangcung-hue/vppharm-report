@@ -4,7 +4,7 @@ export const config = {
   api: { bodyParser: { sizeLimit: "2mb" } },
 };
 
-function tryParseJsonFromText(text) {
+function tryParseJsonFromText(text: string) {
   try {
     return JSON.parse(text);
   } catch {}
@@ -21,18 +21,18 @@ function tryParseJsonFromText(text) {
   return null;
 }
 
-function safeArray(value) {
+function safeArray<T = any>(value: any): T[] {
   return Array.isArray(value) ? value : [];
 }
 
-function formatNumber(value) {
+function formatNumber(value: any) {
   const num = Number(value || 0);
   return new Intl.NumberFormat("vi-VN", {
     maximumFractionDigits: 0,
   }).format(num);
 }
 
-function formatVND(value) {
+function formatVND(value: any) {
   const num = Number(value || 0);
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
@@ -41,13 +41,14 @@ function formatVND(value) {
   }).format(num);
 }
 
-function buildContextSummary(report) {
+function buildContextSummary(report: any) {
   const employee = report?.employee || {};
   const director = report?.director || {};
   const products = safeArray(report?.productLines);
 
   const productsSummary = products.length
     ? products
+        .slice(0, 20)
         .map((p, idx) => {
           const lineNo = idx + 1;
           return [
@@ -99,116 +100,172 @@ CHỈ SỐ CHUYẾN ĐI
 - Điểm mạnh: ${report?.employeeStrengths || "unknown"}
 - Điểm yếu: ${report?.employeeWeaknesses || "unknown"}
 
-DANH MỤC MẶT HÀNG VÀ DOANH SỐ DỰ KIẾN
+DANH MỤC MẶT HÀNG
 ${productsSummary}
 
 TỔNG HỢP DOANH SỐ
 - Tổng doanh số dự kiến từ các mặt hàng: ${formatVND(totalExpectedRevenue)}
-- Chênh lệch giữa doanh số chuyến đi và doanh số dự kiến từ mặt hàng:
-  ${formatVND(tripRevenue - totalExpectedRevenue)}
+- Chênh lệch giữa doanh số chuyến đi và doanh số dự kiến từ mặt hàng: ${formatVND(
+    tripRevenue - totalExpectedRevenue
+  )}
 
 FILE EXCEL ĐÍNH KÈM
 - Tên file: ${report?.excelFile?.fileName || "unknown"}
-- Lưu ý: Hiện tại hệ thống mới có metadata file, chưa parse nội dung Excel để đọc chi tiết số liệu trong file.
+- Lưu ý: Hệ thống mới có metadata file, chưa parse nội dung chi tiết của Excel.
 `.trim();
 }
 
-function buildAnalysisText(json) {
+function normalizeList(value: any) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string") return [value];
+  if (typeof value === "object") return [value];
+  return [];
+}
+
+function mapAnalysisShape(input: any) {
+  const src = input && typeof input === "object" ? input : {};
+
+  const tripSummary =
+    src.tripSummary ||
+    src.executive_summary ||
+    src.manager_briefing ||
+    src.trip_assessment ||
+    "";
+
+  const employeeAssessment =
+    src.employeeAssessment ||
+    src.employeePerformance ||
+    src.employee_assessment ||
+    "";
+
+  const coverageAssessment =
+    src.coverageAssessment ||
+    src.marketCoverage ||
+    src.market_coverage_assessment ||
+    "";
+
+  const salesAssessment =
+    src.salesAssessment ||
+    src.salesPotential ||
+    src.product_mix_assessment ||
+    "";
+
+  const strengthHighlights =
+    normalizeList(src.strengthHighlights).length > 0
+      ? normalizeList(src.strengthHighlights)
+      : normalizeList(src.key_strengths);
+
+  const weaknessHighlights =
+    normalizeList(src.weaknessHighlights).length > 0
+      ? normalizeList(src.weaknessHighlights)
+      : normalizeList(src.key_weaknesses);
+
+  const risks = normalizeList(src.risks);
+  const opportunities = normalizeList(src.opportunities);
+
+  const managerRecommendations =
+    normalizeList(src.managerRecommendations).length > 0
+      ? normalizeList(src.managerRecommendations)
+      : normalizeList(src.managerRecommendation).length > 0
+      ? normalizeList(src.managerRecommendation)
+      : normalizeList(src.coaching_recommendation);
+
+  const nextWeekActions =
+    normalizeList(src.nextWeekActions).length > 0
+      ? normalizeList(src.nextWeekActions)
+      : normalizeList(src.action_plan).length > 0
+      ? normalizeList(src.action_plan)
+      : normalizeList(src.next_week_action_plan);
+
+  const questionsToClarify =
+    normalizeList(src.questions_to_clarify).length > 0
+      ? normalizeList(src.questions_to_clarify)
+      : normalizeList(src.questionsToClarify);
+
+  const scores =
+    src.scores && typeof src.scores === "object" ? src.scores : undefined;
+
+  return {
+    tripSummary,
+    employeeAssessment,
+    coverageAssessment,
+    salesAssessment,
+    strengthHighlights,
+    weaknessHighlights,
+    risks,
+    opportunities,
+    managerRecommendations,
+    nextWeekActions,
+    questionsToClarify,
+    scores,
+  };
+}
+
+function buildAnalysisText(json: any) {
   if (!json || typeof json !== "object") return "";
 
-  const lines = [];
+  const lines: string[] = [];
 
-  const pushTitle = (text) => {
-    if (!text) return;
-    lines.push(text);
-  };
+  const pushSection = (title: string, items: any) => {
+    if (!items) return;
 
-  const pushParagraph = (text) => {
-    if (!text) return;
-    lines.push(text);
-    lines.push("");
-  };
-
-  const pushList = (title, arr, formatter) => {
-    if (!Array.isArray(arr) || arr.length === 0) return;
     lines.push(title);
-    arr.forEach((item, idx) => {
-      const text = formatter ? formatter(item, idx) : String(item || "");
-      if (text) lines.push(`- ${text}`);
-    });
+
+    if (Array.isArray(items)) {
+      for (const it of items) {
+        if (typeof it === "string") {
+          lines.push(`- ${it}`);
+        } else if (it && typeof it === "object") {
+          const t = it.title || it.name || it.label || it.action || "Mục";
+          const r =
+            it.reason ||
+            it.description ||
+            it.suggestion ||
+            it.owner ||
+            it.kpi ||
+            it.priority ||
+            "";
+          lines.push(`- ${t}${r ? `: ${r}` : ""}`);
+        }
+      }
+    } else if (typeof items === "string") {
+      lines.push(items);
+    } else {
+      lines.push(JSON.stringify(items));
+    }
+
     lines.push("");
   };
 
-  pushTitle("1. TÓM TẮT ĐIỀU HÀNH");
-  pushParagraph(json.manager_briefing);
-
-  pushTitle("2. ĐÁNH GIÁ TỔNG QUAN CHUYẾN ĐI");
-  pushParagraph(json.trip_assessment);
-
-  pushTitle("3. ĐÁNH GIÁ NHÂN VIÊN");
-  pushParagraph(json.employee_assessment);
-
-  pushTitle("4. ĐÁNH GIÁ ĐỊA BÀN VÀ ĐỘ PHỦ");
-  pushParagraph(json.market_coverage_assessment);
-
-  pushTitle("5. ĐÁNH GIÁ CƠ CẤU MẶT HÀNG / DOANH SỐ");
-  pushParagraph(json.product_mix_assessment);
-
-  pushList("6. ĐIỂM MẠNH NỔI BẬT", json.key_strengths);
-  pushList("7. ĐIỂM YẾU / KHOẢNG TRỐNG CẦN XỬ LÝ", json.key_weaknesses);
-
-  pushList("8. RỦI RO QUAN TRỌNG", json.risks, (item) => {
-    if (typeof item === "string") return item;
-    return `${item?.title || "Rủi ro"}${item?.severity ? ` [${item.severity}]` : ""}${item?.reason ? `: ${item.reason}` : ""}`;
-  });
-
-  pushList("9. CƠ HỘI BÁN HÀNG", json.opportunities, (item) => {
-    if (typeof item === "string") return item;
-    return `${item?.title || "Cơ hội"}${item?.impact ? ` [${item.impact}]` : ""}${item?.reason ? `: ${item.reason}` : ""}`;
-  });
-
-  pushTitle("10. GỢI Ý COACHING CHO GIÁM ĐỐC");
-  pushParagraph(json.coaching_recommendation);
-
-  pushList("11. KẾ HOẠCH HÀNH ĐỘNG TUẦN TỚI", json.next_week_action_plan, (item) => {
-    if (typeof item === "string") return item;
-    return [
-      item?.action || "Hành động",
-      item?.owner ? `Owner: ${item.owner}` : "",
-      item?.priority ? `Ưu tiên: ${item.priority}` : "",
-      item?.kpi ? `KPI: ${item.kpi}` : "",
-      item?.deadline ? `Deadline: ${item.deadline}` : "",
-    ]
-      .filter(Boolean)
-      .join(" | ");
-  });
-
-  pushList("12. CÂU HỎI CẦN LÀM RÕ THÊM", json.questions_to_clarify);
+  pushSection("TÓM TẮT CHUYẾN ĐI", json.tripSummary);
+  pushSection("ĐÁNH GIÁ NHÂN VIÊN", json.employeeAssessment);
+  pushSection("ĐÁNH GIÁ ĐỘ PHỦ THỊ TRƯỜNG", json.coverageAssessment);
+  pushSection("ĐÁNH GIÁ DOANH SỐ", json.salesAssessment);
+  pushSection("ĐIỂM MẠNH NỔI BẬT", json.strengthHighlights);
+  pushSection("ĐIỂM YẾU CẦN CẢI THIỆN", json.weaknessHighlights);
+  pushSection("RỦI RO", json.risks);
+  pushSection("CƠ HỘI", json.opportunities);
+  pushSection("KHUYẾN NGHỊ QUẢN LÝ", json.managerRecommendations);
+  pushSection("KẾ HOẠCH TUẦN TỚI", json.nextWeekActions);
+  pushSection("CÂU HỎI CẦN LÀM RÕ", json.questionsToClarify);
 
   if (json?.scores && typeof json.scores === "object") {
-    lines.push("13. CHẤM ĐIỂM THAM CHIẾU");
-    lines.push(
-      `- Execution: ${json.scores.execution ?? "unknown"}/100`
-    );
-    lines.push(
-      `- Coaching readiness: ${json.scores.coaching_readiness ?? "unknown"}/100`
-    );
-    lines.push(
-      `- Market coverage: ${json.scores.market_coverage ?? "unknown"}/100`
-    );
-    lines.push(
-      `- Sales opportunity: ${json.scores.sales_opportunity ?? "unknown"}/100`
-    );
-    lines.push(
-      `- Next week readiness: ${json.scores.next_week_readiness ?? "unknown"}/100`
-    );
+    lines.push("ĐIỂM THAM CHIẾU");
+    lines.push(`- Execution: ${json.scores.execution ?? "unknown"}/100`);
+    lines.push(`- Coaching readiness: ${json.scores.coaching_readiness ?? "unknown"}/100`);
+    lines.push(`- Market coverage: ${json.scores.market_coverage ?? "unknown"}/100`);
+    lines.push(`- Sales opportunity: ${json.scores.sales_opportunity ?? "unknown"}/100`);
+    lines.push(`- Next week readiness: ${json.scores.next_week_readiness ?? "unknown"}/100`);
     lines.push("");
   }
 
   return lines.join("\n").trim();
 }
 
-export default async function handler(req, res) {
+export default async function handler(req: any, res: any) {
+  const startedAt = Date.now();
+
   try {
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
@@ -224,25 +281,30 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Missing OPENAI_API_KEY on Vercel" });
     }
 
-    const client = new OpenAI({ apiKey });
+    console.log("analyzeWeeklyReport:start", {
+      reportName: report?.reportName || "",
+      employeeName: report?.employee?.name || "",
+      province: report?.province || "",
+      productLines: Array.isArray(report?.productLines) ? report.productLines.length : 0,
+    });
+
+    const client = new OpenAI({
+      apiKey,
+      timeout: 40000,
+    });
+
+    const contextSummary = buildContextSummary(report);
 
     const schemaHint = {
-      manager_briefing:
-        "Tóm tắt điều hành 1 đoạn, sâu sắc, súc tích, nêu rõ chất lượng chuyến đi và ưu tiên quản trị.",
-      trip_assessment:
-        "Đánh giá tổng quan hiệu quả chuyến đi, mức độ thực chất, chất lượng làm việc trên thị trường.",
-      employee_assessment:
-        "Đánh giá năng lực nhân viên, mức độ chủ động, khả năng chăm sóc khách hàng, chốt đơn, phát triển địa bàn.",
-      market_coverage_assessment:
-        "Đánh giá độ phủ và mức độ khai thác địa bàn, chỉ ra chỗ còn trống.",
-      product_mix_assessment:
-        "Đánh giá hợp lý hay bất hợp lý của cơ cấu sản phẩm, sản lượng và doanh số dự kiến.",
-      key_strengths: ["Điểm mạnh 1", "Điểm mạnh 2"],
-      key_weaknesses: ["Điểm yếu 1", "Điểm yếu 2"],
+      tripSummary: ["Nhận định ngắn về chất lượng chuyến đi"],
+      employeeAssessment: ["Nhận định về năng lực và hành vi làm việc của nhân viên"],
+      coverageAssessment: ["Nhận định về độ phủ, khoảng trống thị trường, mức khai thác địa bàn"],
+      salesAssessment: ["Nhận định về doanh số, cơ cấu sản phẩm, chất lượng cơ hội bán hàng"],
+      strengthHighlights: ["Điểm mạnh 1", "Điểm mạnh 2"],
+      weaknessHighlights: ["Điểm yếu 1", "Điểm yếu 2"],
       risks: [
         {
           title: "Rủi ro",
-          severity: "high|medium|low",
           reason: "Vì sao đây là rủi ro",
           suggestion: "Khuyến nghị xử lý",
         },
@@ -250,23 +312,21 @@ export default async function handler(req, res) {
       opportunities: [
         {
           title: "Cơ hội",
-          impact: "high|medium|low",
           reason: "Vì sao đây là cơ hội",
           suggestion: "Cách tận dụng",
         },
       ],
-      coaching_recommendation:
-        "Hướng coaching cụ thể cho giám đốc khi đi cùng nhân viên trong tuần tới.",
-      next_week_action_plan: [
+      managerRecommendations: ["Khuyến nghị coaching/quản lý 1", "Khuyến nghị 2"],
+      nextWeekActions: [
         {
           action: "Việc cần làm",
-          owner: "Director|Employee|Admin|Sales Team",
+          owner: "Director|Employee|Sales Team",
           priority: "P0|P1|P2",
-          kpi: "Chỉ số đo lường",
+          kpi: "Chỉ số theo dõi",
           deadline: "YYYY-MM-DD hoặc unknown",
         },
       ],
-      questions_to_clarify: ["Câu hỏi 1", "Câu hỏi 2"],
+      questionsToClarify: ["Câu hỏi 1", "Câu hỏi 2"],
       scores: {
         execution: 0,
         coaching_readiness: 0,
@@ -276,48 +336,44 @@ export default async function handler(req, res) {
       },
     };
 
-    const contextSummary = buildContextSummary(report);
-
     const prompt = `
-Bạn là chuyên gia điều hành bán hàng ngành dược tại Việt Nam, đang tư vấn trực tiếp cho Giám đốc kinh doanh VP-PHARM.
+Bạn là cố vấn điều hành bán hàng ngành dược cho VP-PHARM.
 
-MỤC TIÊU
-Phân tích sâu sắc chuyến đi thị trường trong tuần, không chỉ tóm tắt dữ liệu mà phải:
-1. Nhìn ra chất lượng thực của chuyến đi.
-2. Đánh giá chính xác năng lực và khoảng trống của nhân viên.
-3. Chỉ ra rủi ro quản trị, rủi ro thị trường, rủi ro độ phủ.
-4. Nêu cơ hội bán hàng, cơ hội mở rộng khách hàng, cơ hội cải thiện sản phẩm.
-5. Đề xuất kế hoạch hành động tuần tới thật cụ thể, đủ sâu và hơn mong đợi của Giám đốc kinh doanh.
-6. Nếu dữ liệu có dấu hiệu bất hợp lý, phải chỉ ra.
-7. Nếu thiếu dữ liệu, không được bịa. Hãy ghi "unknown" khi cần và đưa vào questions_to_clarify.
-
-NGUYÊN TẮC PHÂN TÍCH
-- Phải có tư duy điều hành bán hàng thực chiến.
-- Phải nhìn theo góc độ Giám đốc kinh doanh, không phải chỉ là thư ký ghi chép.
-- Phải đánh giá cả: con người, địa bàn, độ phủ, cơ cấu sản phẩm, tiềm năng doanh số, mức độ kỷ luật thị trường.
-- Kế hoạch tuần tới phải có owner, priority, KPI và deadline nếu có thể suy ra hợp lý.
+Nhiệm vụ:
+- Phân tích báo cáo đi thị trường tuần từ góc nhìn giám đốc kinh doanh.
+- Nhận định ngắn gọn, thực chiến, không lan man.
+- Không bịa dữ liệu.
+- Nếu thiếu dữ liệu thì ghi "unknown" hoặc đưa vào questionsToClarify.
 - Chỉ trả về JSON hợp lệ.
-- Không thêm giải thích ngoài JSON.
+- Không thêm markdown, không thêm giải thích ngoài JSON.
 
-SCHEMA JSON BẮT BUỘC:
-${JSON.stringify(schemaHint, null, 2)}
+Yêu cầu trọng tâm:
+1. Đánh giá chất lượng chuyến đi.
+2. Đánh giá nhân viên.
+3. Đánh giá độ phủ địa bàn.
+4. Đánh giá doanh số và cơ cấu sản phẩm.
+5. Chỉ ra điểm mạnh, điểm yếu, rủi ro, cơ hội.
+6. Đề xuất khuyến nghị quản lý.
+7. Lập kế hoạch tuần tới có action, owner, priority, KPI, deadline nếu suy ra hợp lý.
 
-DỮ LIỆU BÁO CÁO:
-${typeof report === "string" ? report : JSON.stringify(report, null, 2)}
+Schema JSON bắt buộc:
+${JSON.stringify(schemaHint)}
 
-TÓM TẮT NGỮ CẢNH ĐÃ CHUẨN HÓA:
+Dữ liệu chuẩn hóa:
 ${contextSummary}
 `.trim();
 
+    console.log("analyzeWeeklyReport:openai_request");
+
     const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
+      model: "gpt-4o-mini",
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
           content:
-            "Bạn là cố vấn điều hành bán hàng cấp cao cho VP-PHARM. Chỉ trả về JSON hợp lệ, sâu sắc, thực chiến, không bịa dữ liệu.",
+            "Bạn là cố vấn điều hành bán hàng cấp cao cho VP-PHARM. Chỉ trả về JSON hợp lệ, thực chiến, ngắn gọn, không bịa dữ liệu.",
         },
         {
           role: "user",
@@ -325,6 +381,8 @@ ${contextSummary}
         },
       ],
     });
+
+    console.log("analyzeWeeklyReport:openai_done_ms", Date.now() - startedAt);
 
     const raw = completion.choices?.[0]?.message?.content || "{}";
     const parsed = tryParseJsonFromText(raw);
@@ -337,18 +395,31 @@ ${contextSummary}
       });
     }
 
-    const analysis_json = parsed;
-    const analysis_text = buildAnalysisText(parsed);
+    const analysis_json = mapAnalysisShape(parsed);
+    const analysis_text = buildAnalysisText(analysis_json);
+
+    console.log("analyzeWeeklyReport:done_ms", Date.now() - startedAt);
 
     return res.status(200).json({
       analysis_json,
       analysis_text,
       raw,
+      ok: true,
+      durationMs: Date.now() - startedAt,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("analyzeWeeklyReport error:", err);
+
+    const message =
+      err?.status === 408 || err?.code === "ETIMEDOUT"
+        ? "OpenAI timeout"
+        : err?.message || "Internal error";
+
     return res.status(500).json({
-      error: err?.message || "Internal error",
+      error: message,
+      detail: err?.name || "unknown_error",
+      ok: false,
+      durationMs: Date.now() - startedAt,
     });
   }
 }
