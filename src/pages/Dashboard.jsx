@@ -7,6 +7,25 @@ import {
   query,
   limit,
 } from "firebase/firestore";
+import {
+  BarChart3,
+  MapPinned,
+  TrendingUp,
+  TriangleAlert,
+  Lightbulb,
+  Users,
+  FileText,
+  HandCoins,
+} from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 function formatVND(value) {
   const amount = Number(value || 0);
@@ -52,20 +71,50 @@ function matchesManagerFallback(employee, profile, currentUser) {
   return false;
 }
 
-function StatCard({ title, value, sub }) {
+function safeShortName(text = "", max = 18) {
+  const str = String(text || "");
+  return str.length > max ? `${str.slice(0, max)}…` : str;
+}
+
+function KpiCard({ icon, title, value, sub }) {
   return (
     <div
       style={{
         padding: 16,
         background: "rgba(255,255,255,.06)",
-        borderRadius: 16,
+        borderRadius: 18,
         border: "1px solid rgba(255,255,255,.10)",
+        display: "grid",
+        gap: 10,
       }}
     >
-      <div className="small">{title}</div>
-      <div style={{ fontWeight: 900, fontSize: 22, marginTop: 8 }}>{value}</div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <div
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 12,
+            display: "grid",
+            placeItems: "center",
+            background: "rgba(255,255,255,.08)",
+            border: "1px solid rgba(255,255,255,.10)",
+          }}
+        >
+          {icon}
+        </div>
+        <div className="small">{title}</div>
+      </div>
+
+      <div style={{ fontWeight: 900, fontSize: 24 }}>{value}</div>
+
       {sub ? (
-        <div className="small" style={{ marginTop: 6 }}>
+        <div className="small" style={{ lineHeight: 1.5 }}>
           {sub}
         </div>
       ) : null}
@@ -73,11 +122,38 @@ function StatCard({ title, value, sub }) {
   );
 }
 
-function SectionCard({ title, children }) {
+function SectionCard({ title, subtitle, icon, children }) {
   return (
     <div className="card" style={{ boxShadow: "none" }}>
       <div className="card-header">
-        <h2 style={{ textTransform: "uppercase", letterSpacing: 0.4 }}>{title}</h2>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginBottom: 6,
+          }}
+        >
+          {icon ? (
+            <div
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                display: "grid",
+                placeItems: "center",
+                background: "rgba(255,255,255,.08)",
+                border: "1px solid rgba(255,255,255,.10)",
+              }}
+            >
+              {icon}
+            </div>
+          ) : null}
+          <h2 style={{ textTransform: "uppercase", letterSpacing: 0.4, margin: 0 }}>
+            {title}
+          </h2>
+        </div>
+        {subtitle ? <p>{subtitle}</p> : null}
       </div>
       <div className="card-body">{children}</div>
     </div>
@@ -147,6 +223,54 @@ function InsightList({ items, emptyText }) {
   );
 }
 
+function ChartCard({ title, subtitle, data, dataKey = "value", valueFormatter }) {
+  if (!data.length) {
+    return (
+      <SectionCard title={title} subtitle={subtitle} icon={<BarChart3 size={18} />}>
+        <div className="small">Chưa có dữ liệu để hiển thị biểu đồ.</div>
+      </SectionCard>
+    );
+  }
+
+  return (
+    <SectionCard title={title} subtitle={subtitle} icon={<BarChart3 size={18} />}>
+      <div style={{ width: "100%", height: 320 }}>
+        <ResponsiveContainer>
+          <BarChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+            <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
+            <XAxis
+              dataKey="shortLabel"
+              stroke="rgba(255,255,255,.65)"
+              tick={{ fontSize: 12 }}
+            />
+            <YAxis
+              stroke="rgba(255,255,255,.65)"
+              tick={{ fontSize: 12 }}
+              tickFormatter={(v) =>
+                typeof valueFormatter === "function" ? valueFormatter(v) : v
+              }
+              width={90}
+            />
+            <Tooltip
+              formatter={(value) =>
+                typeof valueFormatter === "function" ? valueFormatter(value) : value
+              }
+              contentStyle={{
+                background: "#0f172a",
+                border: "1px solid rgba(255,255,255,.12)",
+                borderRadius: 12,
+                color: "#fff",
+              }}
+              labelStyle={{ color: "#fff" }}
+            />
+            <Bar dataKey={dataKey} radius={[8, 8, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </SectionCard>
+  );
+}
+
 export default function Dashboard({
   isAdmin = false,
   isDirector = false,
@@ -210,6 +334,7 @@ export default function Dashboard({
 
         setReports(visibleReports);
         setEmployees(employeesCache);
+        setError("");
       } catch (e) {
         console.error(e);
         setError("Không thể tải dashboard.");
@@ -265,8 +390,14 @@ export default function Dashboard({
         r.employeeName || r?.input?.employee?.name || "Chưa rõ nhân viên";
       const province = r.province || r?.input?.province || "Chưa rõ địa bàn";
 
-      employeeMap.set(employeeName, (employeeMap.get(employeeName) || 0) + Number(r.tripRevenue || 0));
-      provinceMap.set(province, (provinceMap.get(province) || 0) + Number(r.tripRevenue || 0));
+      employeeMap.set(
+        employeeName,
+        (employeeMap.get(employeeName) || 0) + Number(r.tripRevenue || 0)
+      );
+      provinceMap.set(
+        province,
+        (provinceMap.get(province) || 0) + Number(r.tripRevenue || 0)
+      );
 
       const riskItems = Array.isArray(r.analysis_json?.risks)
         ? r.analysis_json.risks
@@ -285,12 +416,20 @@ export default function Dashboard({
     }
 
     const topEmployees = [...employeeMap.entries()]
-      .map(([label, value]) => ({ label, value }))
+      .map(([label, value]) => ({
+        label,
+        shortLabel: safeShortName(label, 14),
+        value,
+      }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
     const topProvinces = [...provinceMap.entries()]
-      .map(([label, value]) => ({ label, value }))
+      .map(([label, value]) => ({
+        label,
+        shortLabel: safeShortName(label, 14),
+        value,
+      }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
@@ -299,12 +438,13 @@ export default function Dashboard({
       totalTripRevenue,
       totalExpectedRevenue,
       totalVisits,
+      employeeCount: employees.filter((x) => x.active !== false).length,
       topEmployees,
       topProvinces,
       risks: risks.slice(0, 6),
       opportunities: opportunities.slice(0, 6),
     };
-  }, [reports]);
+  }, [reports, employees]);
 
   if (!isAdmin && !isDirector) {
     return (
@@ -331,38 +471,85 @@ export default function Dashboard({
           </p>
         </div>
         <div className="card-body">
-          {error ? <div className="small">{error}</div> : null}
+          {error ? (
+            <div
+              style={{
+                marginBottom: 14,
+                padding: 12,
+                borderRadius: 14,
+                border: "1px solid rgba(239,68,68,.35)",
+                background: "rgba(239,68,68,.10)",
+              }}
+            >
+              <div className="small" style={{ color: "#ffd5d5" }}>
+                {error}
+              </div>
+            </div>
+          ) : null}
 
-          <div className="grid two">
-            <StatCard
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <KpiCard
+              icon={<FileText size={18} />}
               title="Tổng số báo cáo"
               value={summary.totalReports}
               sub="Số báo cáo đang hiển thị theo quyền"
             />
-            <StatCard
+            <KpiCard
+              icon={<Users size={18} />}
               title="Tổng khách viếng thăm"
               value={summary.totalVisits}
-              sub="Tổng lượt khách hàng từ các báo cáo"
+              sub="Tổng lượt khách từ các báo cáo"
             />
-          </div>
-
-          <div className="grid two" style={{ marginTop: 16 }}>
-            <StatCard
-              title="Tổng doanh số chuyến đi"
+            <KpiCard
+              icon={<HandCoins size={18} />}
+              title="Doanh số chuyến đi"
               value={formatVND(summary.totalTripRevenue)}
               sub="Cộng từ tripRevenue"
             />
-            <StatCard
-              title="Tổng doanh số dự kiến"
+            <KpiCard
+              icon={<TrendingUp size={18} />}
+              title="Doanh số dự kiến"
               value={formatVND(summary.totalExpectedRevenue)}
               sub="Cộng từ totalExpectedRevenue"
+            />
+            <KpiCard
+              icon={<Users size={18} />}
+              title="Nhân viên hoạt động"
+              value={summary.employeeCount}
+              sub="Danh mục nhân viên active"
             />
           </div>
         </div>
       </div>
 
       <div className="grid two">
-        <SectionCard title="Top nhân viên theo doanh số">
+        <ChartCard
+          title="Biểu đồ doanh số theo nhân viên"
+          subtitle="Top 5 nhân viên có doanh số chuyến đi cao nhất"
+          data={summary.topEmployees}
+          valueFormatter={(v) => formatVND(v)}
+        />
+
+        <ChartCard
+          title="Biểu đồ doanh số theo địa bàn"
+          subtitle="Top 5 địa bàn có doanh số chuyến đi cao nhất"
+          data={summary.topProvinces}
+          valueFormatter={(v) => formatVND(v)}
+        />
+      </div>
+
+      <div className="grid two">
+        <SectionCard
+          title="Top nhân viên theo doanh số"
+          subtitle="Danh sách xếp hạng theo tripRevenue"
+          icon={<Users size={18} />}
+        >
           <RankList
             items={summary.topEmployees}
             emptyText="Chưa có dữ liệu nhân viên."
@@ -370,7 +557,11 @@ export default function Dashboard({
           />
         </SectionCard>
 
-        <SectionCard title="Top địa bàn theo doanh số">
+        <SectionCard
+          title="Top địa bàn theo doanh số"
+          subtitle="Danh sách xếp hạng theo tripRevenue"
+          icon={<MapPinned size={18} />}
+        >
           <RankList
             items={summary.topProvinces}
             emptyText="Chưa có dữ liệu địa bàn."
@@ -380,14 +571,22 @@ export default function Dashboard({
       </div>
 
       <div className="grid two">
-        <SectionCard title="Cảnh báo rủi ro từ AI">
+        <SectionCard
+          title="Cảnh báo rủi ro từ AI"
+          subtitle="Các rủi ro nổi bật được AI trích xuất từ báo cáo"
+          icon={<TriangleAlert size={18} />}
+        >
           <InsightList
             items={summary.risks}
             emptyText="Chưa có cảnh báo rủi ro nào."
           />
         </SectionCard>
 
-        <SectionCard title="Cơ hội nổi bật từ AI">
+        <SectionCard
+          title="Cơ hội nổi bật từ AI"
+          subtitle="Các cơ hội nổi bật được AI gợi ý từ báo cáo"
+          icon={<Lightbulb size={18} />}
+        >
           <InsightList
             items={summary.opportunities}
             emptyText="Chưa có cơ hội nổi bật nào."
