@@ -217,6 +217,99 @@ function StatCard({ title, value, sub }) {
   );
 }
 
+function normalizeArrayContent(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data.filter(Boolean);
+  if (typeof data === "string") return [data];
+  if (typeof data === "object") return [data];
+  return [];
+}
+
+function renderInsightItem(item, index) {
+  if (typeof item === "string") {
+    return (
+      <div
+        key={index}
+        style={{
+          padding: 12,
+          borderRadius: 12,
+          background: "rgba(255,255,255,.05)",
+          border: "1px solid rgba(255,255,255,.08)",
+        }}
+      >
+        {item}
+      </div>
+    );
+  }
+
+  if (item && typeof item === "object") {
+    const title = item.title || item.name || item.staff || item.label || `Mục ${index + 1}`;
+    const desc =
+      item.reason ||
+      item.rationale ||
+      item.focus ||
+      item.owner ||
+      item.suggested_action ||
+      item.description ||
+      item.summary ||
+      "";
+
+    return (
+      <div
+        key={index}
+        style={{
+          padding: 12,
+          borderRadius: 12,
+          background: "rgba(255,255,255,.05)",
+          border: "1px solid rgba(255,255,255,.08)",
+        }}
+      >
+        <div style={{ fontWeight: 800 }}>{title}</div>
+        {desc ? (
+          <div className="small" style={{ marginTop: 6, lineHeight: 1.5 }}>
+            {desc}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function AnalysisSection({ title, data }) {
+  const items = normalizeArrayContent(data);
+
+  if (!items.length) return null;
+
+  return (
+    <div
+      style={{
+        padding: 16,
+        borderRadius: 18,
+        background: "rgba(255,255,255,.05)",
+        border: "1px solid rgba(255,255,255,.10)",
+      }}
+    >
+      <div
+        style={{
+          fontWeight: 900,
+          fontSize: 15,
+          letterSpacing: 0.4,
+          textTransform: "uppercase",
+          marginBottom: 10,
+        }}
+      >
+        {title}
+      </div>
+
+      <div style={{ display: "grid", gap: 10 }}>
+        {items.map((item, index) => renderInsightItem(item, index))}
+      </div>
+    </div>
+  );
+}
+
 const initialForm = {
   weekFrom: "",
   weekTo: "",
@@ -1131,21 +1224,77 @@ export default function Weekly({
             />
           </div>
 
-          <div
-            style={{
-              whiteSpace: "pre-wrap",
-              background:
-                "linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04))",
-              padding: 18,
-              borderRadius: 18,
-              border: "1px solid rgba(255,255,255,.10)",
-              minHeight: 220,
-              lineHeight: 1.7,
-              fontSize: 14,
-            }}
-          >
-            {analysisText || "Chưa có kết quả."}
-          </div>
+          {analysisJson ? (
+            <div style={{ display: "grid", gap: 14 }}>
+              <div className="grid two">
+                <AnalysisSection
+                  title="Tóm tắt chuyến đi"
+                  data={analysisJson.tripSummary || analysisJson.executive_summary}
+                />
+                <AnalysisSection
+                  title="Đánh giá nhân viên"
+                  data={analysisJson.employeeAssessment || analysisJson.employeePerformance}
+                />
+              </div>
+
+              <div className="grid two">
+                <AnalysisSection
+                  title="Đánh giá độ phủ thị trường"
+                  data={analysisJson.coverageAssessment || analysisJson.marketCoverage}
+                />
+                <AnalysisSection
+                  title="Đánh giá doanh số"
+                  data={analysisJson.salesAssessment || analysisJson.salesPotential}
+                />
+              </div>
+
+              <div className="grid two">
+                <AnalysisSection
+                  title="Điểm mạnh nổi bật"
+                  data={analysisJson.strengthHighlights}
+                />
+                <AnalysisSection
+                  title="Điểm yếu cần cải thiện"
+                  data={analysisJson.weaknessHighlights}
+                />
+              </div>
+
+              <div className="grid two">
+                <AnalysisSection title="Rủi ro" data={analysisJson.risks} />
+                <AnalysisSection title="Cơ hội" data={analysisJson.opportunities} />
+              </div>
+
+              <div className="grid two">
+                <AnalysisSection
+                  title="Khuyến nghị quản lý"
+                  data={
+                    analysisJson.managerRecommendations ||
+                    analysisJson.managerRecommendation
+                  }
+                />
+                <AnalysisSection
+                  title="Kế hoạch tuần tới"
+                  data={analysisJson.nextWeekActions || analysisJson.action_plan}
+                />
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                whiteSpace: "pre-wrap",
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04))",
+                padding: 18,
+                borderRadius: 18,
+                border: "1px solid rgba(255,255,255,.10)",
+                minHeight: 220,
+                lineHeight: 1.7,
+                fontSize: 14,
+              }}
+            >
+              {analysisText || "Chưa có kết quả."}
+            </div>
+          )}
 
           {analysisJson ? (
             <details style={{ marginTop: 14 }}>
