@@ -597,6 +597,7 @@ export default function Dashboard({
   const [employees, setEmployees] = useState([]);
   const [error, setError] = useState("");
   const [preset, setPreset] = useState("30d");
+  const [isExporting, setIsExporting] = useState(false);
 
   const today = useMemo(() => endOfDay(new Date()), []);
   const initialFrom = useMemo(() => fmtDateInput(addDays(today, -29)), [today]);
@@ -802,12 +803,13 @@ export default function Dashboard({
         ? [r.analysis_json.opportunities]
         : [];
 
-      const actionItems = Array.isArray(
-        r.analysis_json?.nextWeekActions || r.analysis_json?.action_plan
-      )
-        ? r.analysis_json?.nextWeekActions || r.analysis_json?.action_plan
-        : r.analysis_json?.nextWeekActions || r.analysis_json?.action_plan
-        ? [r.analysis_json?.nextWeekActions || r.analysis_json?.action_plan]
+      const actionSource =
+        r.analysis_json?.nextWeekActions || r.analysis_json?.action_plan || [];
+
+      const actionItems = Array.isArray(actionSource)
+        ? actionSource
+        : actionSource
+        ? [actionSource]
         : [];
 
       risks.push(...riskItems);
@@ -819,13 +821,23 @@ export default function Dashboard({
     for (const r of currentReports) {
       const weekCode = r.weekCode || r?.input?.weekCode || "";
       const weekLabel = formatWeekLabel(weekCode);
-      const fallbackLabel =
-        String(r.weekFrom || r?.input?.weekFrom || "").slice(5, 10) || "N/A";
+      const reportDate = parseReportDate(r);
+      const fallbackLabel = reportDate ? formatVNDate(reportDate) : "N/A";
       const key = weekLabel || fallbackLabel;
-      weekMap.set(key, (weekMap.get(key) || 0) + Number(r.tripRevenue || 0));
+      const sortKey = reportDate ? reportDate.getTime() : 0;
+
+      if (!weekMap.has(key)) {
+        weekMap.set(key, { label: key, value: 0, sortKey });
+      }
+
+      const existing = weekMap.get(key);
+      existing.value += Number(r.tripRevenue || 0);
+      existing.sortKey = Math.max(existing.sortKey || 0, sortKey);
     }
 
-    const trendData = [...weekMap.entries()].map(([label, value]) => ({ label, value }));
+    const trendData = [...weekMap.values()]
+      .sort((a, b) => a.sortKey - b.sortKey)
+      .map(({ label, value }) => ({ label, value }));
 
     const reportStatus = classifyMetric(currentReports.length, 6, 3);
     const coverageStatus = classifyMetric(coverageScore, 75, 55);
@@ -920,7 +932,7 @@ export default function Dashboard({
       })
       .filter(Boolean);
 
-    const suggestedActions = [...executiveActions, ...normalizedActions].slice(0, 3);
+    const suggestedActions = [...executiveActions, ...normalizedActions].slice(0, 5);
 
     return {
       from: safeFrom,
@@ -958,79 +970,121 @@ export default function Dashboard({
       risks: risks.slice(0, 6),
       opportunities: opportunities.slice(0, 6),
       trendData,
-      executiveWins: executiveWins.slice(0, 3),
-      executiveWarnings: executiveWarnings.slice(0, 3),
+      executiveWins: executiveWins.slice(0, 4),
+      executiveWarnings: executiveWarnings.slice(0, 4),
       suggestedActions,
+      lastUpdatedAt:
+        currentReports.length > 0
+          ? currentReports
+              .map((r) => toMillis(r.createdAt))
+              .sort((a, b) => b - a)[0]
+          : 0,
     };
   }, [reports, employees, fromDate, toDate, today]);
 
   const healthTone = scoreTone(analytics.healthScore);
 
   async function handleExportPDF() {
+    if (isExporting) return;
+
+    if (!analytics.totalReports) {
+      window.alert("Không có dữ liệu trong kỳ hiện tại để xuất báo cáo PDF.");
+      return;
+    }
+
     const ceoBrief = [
-      `Báo cáo điều hành trong kỳ ${formatVNDate(analytics.from)} → ${formatVNDate(
+      `Báo cáo điều hành trong kỳ ${formatVNDate(analytics.from)} đến ${formatVNDate(
         analytics.to
-      )} ghi nhận ${analytics.totalReports} báo cáo, ${analytics.visits} lượt viếng thăm và doanh số chuyến đi đạt ${formatVND(
+      )} ghi nhận ${analytics.totalReports} báo cáo tuần từ ${
+        analytics.employeeCount
+      } nhân sự hoạt động.`,
+      `Tổng lượt viếng thăm khách hàng đạt ${analytics.visits}, doanh số chuyến đi đạt ${formatVND(
         analytics.tripRevenue
-      )}.`,
-      `Doanh số dự kiến hiện ở mức ${formatVND(
-        analytics.expectedRevenue
-      )}, AI Health Score đạt ${analytics.healthScore}/100.`,
+      )}, doanh số dự kiến đạt ${formatVND(analytics.expectedRevenue)}.`,
+      `AI Health Score hiện ở mức ${analytics.healthScore}/100, phản ánh trạng thái điều hành ${scoreColor(
+        analytics.healthScore
+      ).toLowerCase()}.`,
       analytics.executiveWins[0] || analytics.executiveWarnings[0] || "",
     ]
       .filter(Boolean)
       .join(" ");
 
-    await exportDashboardPDF({
-      reportDate: analytics.to || new Date(),
-      logoUrl: LOGO_URL,
+    const aiInsights = [
+      `Kỳ báo cáo: ${formatVNDate(analytics.from)} → ${formatVNDate(analytics.to)}.`,
+      `Kỳ so sánh trước đó: ${formatVNDate(analytics.prevFrom)} → ${formatVNDate(
+        analytics.prevTo
+      )}.`,
+      `Biến động số báo cáo: ${formatPct(analytics.reportChange)}.`,
+      `Biến động doanh số chuyến đi: ${formatPct(analytics.tripRevenueChange)}.`,
+      `Biến động doanh số dự kiến: ${formatPct(analytics.expectedRevenueChange)}.`,
+      `Biến động lượt viếng thăm: ${formatPct(analytics.visitsChange)}.`,
+      analytics.topEmployees[0]
+        ? `Nhân viên dẫn đầu: ${analytics.topEmployees[0].label} với doanh số ${formatVND(
+            analytics.topEmployees[0].value
+          )}.`
+        : "",
+      analytics.topProvinces[0]
+        ? `Địa bàn dẫn đầu: ${analytics.topProvinces[0].label} với doanh số ${formatVND(
+            analytics.topProvinces[0].value
+          )}.`
+        : "",
+    ].filter(Boolean);
 
-      metrics: {
-        totalReports: analytics.totalReports,
-        totalVisits: analytics.visits,
-        totalTripRevenue: analytics.tripRevenue,
-        totalExpectedRevenue: analytics.expectedRevenue,
-        activeEmployees: analytics.employeeCount,
-        healthScore: analytics.healthScore,
-        coverageScore: analytics.coverageScore,
-        salesQualityScore: analytics.salesQualityScore,
-        marketExecutionScore: analytics.marketExecutionScore,
-      },
+    try {
+      setIsExporting(true);
 
-      ai: {
-        ceoBrief,
-        executiveWins: analytics.executiveWins,
-        executiveWarnings: analytics.executiveWarnings,
-        suggestedActions: analytics.suggestedActions,
-        insights: [
-          `Kỳ báo cáo: ${formatVNDate(analytics.from)} → ${formatVNDate(analytics.to)}.`,
-          `Biến động doanh số chuyến đi so với kỳ trước: ${formatPct(
-            analytics.tripRevenueChange
-          )}.`,
-          `Biến động doanh số dự kiến so với kỳ trước: ${formatPct(
-            analytics.expectedRevenueChange
-          )}.`,
-          `Biến động lượt viếng thăm so với kỳ trước: ${formatPct(analytics.visitsChange)}.`,
-        ],
-        risks: analytics.risks.map(normalizeInsightItem).filter(Boolean),
-        opportunities: analytics.opportunities.map(normalizeInsightItem).filter(Boolean),
-      },
+      await exportDashboardPDF({
+        reportDate: analytics.to || new Date(),
+        logoUrl: LOGO_URL,
 
-      ranking: {
-        topEmployees: analytics.topEmployees.map((item) => ({
-          name: item.label,
-          tripRevenue: item.value,
-          visitCustomerCount: 0,
-        })),
-        topProvinces: analytics.topProvinces.map((item) => ({
-          name: item.label,
-          value: item.value,
-          note: "Top doanh số trong kỳ",
-        })),
-      },
+        metrics: {
+          totalReports: analytics.totalReports,
+          totalVisits: analytics.visits,
+          totalTripRevenue: analytics.tripRevenue,
+          totalExpectedRevenue: analytics.expectedRevenue,
+          activeEmployees: analytics.employeeCount,
+          healthScore: analytics.healthScore,
+          coverageScore: analytics.coverageScore,
+          salesQualityScore: analytics.salesQualityScore,
+          marketExecutionScore: analytics.marketExecutionScore,
+        },
 
-      weeklyReports: analytics.currentReports,
-    });
+        ai: {
+          ceoBrief,
+          executiveWins: analytics.executiveWins,
+          executiveWarnings: analytics.executiveWarnings,
+          suggestedActions: analytics.suggestedActions,
+          insights: aiInsights,
+          risks: analytics.risks.map(normalizeInsightItem).filter(Boolean),
+          opportunities: analytics.opportunities.map(normalizeInsightItem).filter(Boolean),
+        },
+
+        ranking: {
+          topEmployees: analytics.topEmployees.map((item) => ({
+            name: item.label,
+            tripRevenue: item.value,
+            revenue: item.value,
+            value: item.value,
+            visitCustomerCount: 0,
+            visits: 0,
+          })),
+          topProvinces: analytics.topProvinces.map((item) => ({
+            name: item.label,
+            province: item.label,
+            value: item.value,
+            revenue: item.value,
+            note: "Top doanh số trong kỳ",
+          })),
+        },
+
+        weeklyReports: analytics.currentReports,
+      });
+    } catch (err) {
+      console.error(err);
+      window.alert("Xuất báo cáo PDF thất bại. Vui lòng thử lại.");
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   if (!isAdmin && !isDirector) {
@@ -1143,6 +1197,12 @@ export default function Dashboard({
                 <span className="small">Độ dài kỳ</span>{" "}
                 <span className="kbd">{analytics.days} ngày</span>
               </span>
+              {analytics.lastUpdatedAt ? (
+                <span className="pill">
+                  <span className="small">Cập nhật cuối</span>{" "}
+                  <span className="kbd">{formatVNDateTime(analytics.lastUpdatedAt)}</span>
+                </span>
+              ) : null}
             </div>
           </SectionCard>
         </div>
@@ -1153,10 +1213,17 @@ export default function Dashboard({
           className="btn"
           type="button"
           onClick={handleExportPDF}
-          style={{ display: "flex", alignItems: "center", gap: 8 }}
+          disabled={isExporting}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            opacity: isExporting ? 0.75 : 1,
+            cursor: isExporting ? "wait" : "pointer",
+          }}
         >
           <Download size={16} />
-          Xuất báo cáo PDF
+          {isExporting ? "Đang chuẩn bị PDF..." : "Xuất báo cáo PDF"}
         </button>
       </div>
 
@@ -1232,7 +1299,7 @@ export default function Dashboard({
 
           <div style={{ marginTop: 14 }}>
             <BriefList
-              title="Top 3 hành động đề xuất tuần tới"
+              title="Top 5 hành động đề xuất tuần tới"
               items={analytics.suggestedActions}
               icon={<Clock3 size={16} />}
             />

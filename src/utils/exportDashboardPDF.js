@@ -1,6 +1,3 @@
-import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
-
 const BRAND = {
   primary: "#0F4C81",
   secondary: "#1F7AE0",
@@ -41,14 +38,23 @@ function formatDate(date = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
+function normalizeArray(arr) {
+  return Array.isArray(arr) ? arr : [];
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function safeText(value, fallback = "Chưa có dữ liệu") {
   if (value === null || value === undefined) return fallback;
   const s = String(value).trim();
   return s || fallback;
-}
-
-function normalizeArray(arr) {
-  return Array.isArray(arr) ? arr : [];
 }
 
 function getHealthScore(metrics = {}) {
@@ -105,15 +111,6 @@ function buildExecutiveSummary({
   )}. AI Health Score hiện ở mức ${score}/100, phản ánh bức tranh điều hành ${state}.`;
 }
 
-function escapeHtml(str) {
-  return String(str ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 function cardKPI(label, value, sub = "") {
   return `
     <div class="kpi-card">
@@ -125,7 +122,13 @@ function cardKPI(label, value, sub = "") {
 }
 
 function listBlock(title, items = [], type = "default") {
-  const cls = type === "danger" ? "list danger" : type === "success" ? "list success" : "list";
+  const cls =
+    type === "danger"
+      ? "list danger"
+      : type === "success"
+      ? "list success"
+      : "list";
+
   const content = items.length
     ? items
         .map(
@@ -186,9 +189,7 @@ function rankingTable(title, rows = [], mode = "employee") {
         .join("")
     : `
       <tr>
-        <td colspan="4" style="text-align:center;color:${BRAND.muted}">
-          Chưa có dữ liệu xếp hạng
-        </td>
+        <td colspan="4" class="table-empty">Chưa có dữ liệu xếp hạng</td>
       </tr>
     `;
 
@@ -200,380 +201,6 @@ function rankingTable(title, rows = [], mode = "employee") {
         <tbody>${body}</tbody>
       </table>
     </div>
-  `;
-}
-
-function createPageShell(content, { pageTitle, pageNumber, reportDate, logoUrl }) {
-  return `
-    <div class="pdf-page">
-      <div class="page-inner">
-        <div class="page-header">
-          <div class="brand-left">
-            <img src="${logoUrl}" alt="VP-PHARM Logo" class="brand-logo" />
-            <div>
-              <div class="brand-name">VP-PHARM</div>
-              <div class="brand-sub">AI Weekly Sales Intelligence</div>
-            </div>
-          </div>
-          <div class="header-right">
-            <div class="header-page-title">${escapeHtml(pageTitle)}</div>
-            <div class="header-date">Ngày xuất: ${escapeHtml(reportDate)}</div>
-          </div>
-        </div>
-
-        ${content}
-
-        <div class="page-footer">
-          <span>VP-PHARM Executive Report</span>
-          <span>Trang ${pageNumber}/5</span>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function buildStyles() {
-  return `
-    <style>
-      * { box-sizing: border-box; }
-      .pdf-root {
-        width: 794px;
-        background: #edf2f7;
-        padding: 24px;
-        font-family: Inter, Arial, Helvetica, sans-serif;
-        color: ${BRAND.text};
-      }
-
-      .pdf-page {
-        width: 794px;
-        min-height: 1123px;
-        background: ${BRAND.white};
-        margin: 0 auto 24px auto;
-        padding: 0;
-        overflow: hidden;
-        page-break-after: always;
-      }
-
-      .page-inner {
-        width: 100%;
-        min-height: 1123px;
-        padding: 34px 34px 24px 34px;
-        position: relative;
-        background:
-          linear-gradient(180deg, rgba(15,76,129,0.05) 0%, rgba(255,255,255,0) 180px),
-          ${BRAND.white};
-      }
-
-      .page-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 26px;
-        padding-bottom: 16px;
-        border-bottom: 1px solid ${BRAND.border};
-      }
-
-      .brand-left {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-      }
-
-      .brand-logo {
-        width: 52px;
-        height: 52px;
-        object-fit: contain;
-        border-radius: 12px;
-        background: #fff;
-      }
-
-      .brand-name {
-        font-size: 22px;
-        font-weight: 800;
-        color: ${BRAND.primary};
-        letter-spacing: 0.4px;
-      }
-
-      .brand-sub {
-        font-size: 12px;
-        color: ${BRAND.muted};
-        margin-top: 2px;
-      }
-
-      .header-right {
-        text-align: right;
-      }
-
-      .header-page-title {
-        font-size: 14px;
-        font-weight: 700;
-        color: ${BRAND.primary};
-      }
-
-      .header-date {
-        font-size: 11px;
-        color: ${BRAND.muted};
-        margin-top: 4px;
-      }
-
-      .hero {
-        background: linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.secondary} 100%);
-        color: white;
-        border-radius: 22px;
-        padding: 28px;
-        margin-bottom: 22px;
-      }
-
-      .hero-label {
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 0.6px;
-        opacity: 0.95;
-        margin-bottom: 10px;
-      }
-
-      .hero-title {
-        font-size: 34px;
-        font-weight: 800;
-        line-height: 1.2;
-        margin-bottom: 10px;
-      }
-
-      .hero-desc {
-        font-size: 14px;
-        line-height: 1.7;
-        opacity: 0.98;
-      }
-
-      .score-box {
-        margin-top: 18px;
-        display: inline-flex;
-        align-items: center;
-        gap: 12px;
-        background: rgba(255,255,255,0.14);
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 16px;
-        padding: 12px 16px;
-      }
-
-      .score-number {
-        font-size: 28px;
-        font-weight: 800;
-      }
-
-      .score-meta {
-        font-size: 12px;
-        line-height: 1.5;
-      }
-
-      .summary-card {
-        background: ${BRAND.bg};
-        border: 1px solid ${BRAND.border};
-        border-radius: 18px;
-        padding: 18px;
-        margin-bottom: 20px;
-      }
-
-      .section-title {
-        font-size: 16px;
-        font-weight: 800;
-        color: ${BRAND.primary};
-        margin-bottom: 14px;
-      }
-
-      .section-text {
-        font-size: 14px;
-        line-height: 1.75;
-        color: ${BRAND.text};
-      }
-
-      .grid-2 {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-      }
-
-      .grid-3 {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 14px;
-      }
-
-      .grid-4 {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
-      }
-
-      .kpi-card {
-        background: ${BRAND.white};
-        border: 1px solid ${BRAND.border};
-        border-radius: 18px;
-        padding: 16px;
-        min-height: 110px;
-      }
-
-      .kpi-label {
-        font-size: 12px;
-        font-weight: 700;
-        color: ${BRAND.muted};
-        margin-bottom: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .kpi-value {
-        font-size: 28px;
-        font-weight: 800;
-        line-height: 1.15;
-        color: ${BRAND.text};
-        margin-bottom: 8px;
-      }
-
-      .kpi-sub {
-        font-size: 12px;
-        color: ${BRAND.muted};
-      }
-
-      .metric-strip {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 14px;
-        margin-top: 8px;
-      }
-
-      .metric-mini {
-        background: ${BRAND.bg};
-        border: 1px solid ${BRAND.border};
-        border-radius: 16px;
-        padding: 16px;
-      }
-
-      .metric-mini .name {
-        font-size: 12px;
-        color: ${BRAND.muted};
-        font-weight: 700;
-        margin-bottom: 8px;
-      }
-
-      .metric-mini .val {
-        font-size: 26px;
-        font-weight: 800;
-      }
-
-      .list {
-        background: ${BRAND.white};
-        border: 1px solid ${BRAND.border};
-        border-radius: 18px;
-        padding: 16px;
-      }
-
-      .list.success {
-        background: #f0fdf4;
-        border-color: #bbf7d0;
-      }
-
-      .list.danger {
-        background: #fef2f2;
-        border-color: #fecaca;
-      }
-
-      .list-title {
-        font-size: 14px;
-        font-weight: 800;
-        margin-bottom: 12px;
-        color: ${BRAND.text};
-      }
-
-      .list ul {
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .list li {
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-        font-size: 13px;
-        line-height: 1.65;
-        margin-bottom: 10px;
-      }
-
-      .bullet {
-        width: 8px;
-        height: 8px;
-        min-width: 8px;
-        border-radius: 999px;
-        background: ${BRAND.secondary};
-        margin-top: 7px;
-      }
-
-      .table-card {
-        background: ${BRAND.white};
-        border: 1px solid ${BRAND.border};
-        border-radius: 18px;
-        padding: 16px;
-      }
-
-      .ranking-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 12.5px;
-      }
-
-      .ranking-table th {
-        text-align: left;
-        padding: 12px 10px;
-        background: ${BRAND.bg};
-        color: ${BRAND.primary};
-        font-size: 12px;
-        border-bottom: 1px solid ${BRAND.border};
-      }
-
-      .ranking-table td {
-        padding: 11px 10px;
-        border-bottom: 1px solid ${BRAND.border};
-        color: ${BRAND.text};
-      }
-
-      .ranking-table tr:last-child td {
-        border-bottom: none;
-      }
-
-      .action-card {
-        border: 1px solid ${BRAND.border};
-        border-radius: 18px;
-        padding: 16px;
-        background: ${BRAND.white};
-      }
-
-      .action-card .action-title {
-        font-size: 14px;
-        font-weight: 800;
-        color: ${BRAND.primary};
-        margin-bottom: 10px;
-      }
-
-      .action-card .action-body {
-        font-size: 13px;
-        line-height: 1.7;
-        color: ${BRAND.text};
-      }
-
-      .page-footer {
-        position: absolute;
-        left: 34px;
-        right: 34px;
-        bottom: 18px;
-        display: flex;
-        justify-content: space-between;
-        color: ${BRAND.muted};
-        font-size: 11px;
-        border-top: 1px solid ${BRAND.border};
-        padding-top: 10px;
-      }
-    </style>
   `;
 }
 
@@ -590,7 +217,10 @@ function extractDashboardData(raw = {}) {
   const totalVisits =
     raw.totalVisits ??
     metrics.totalVisits ??
-    weeklyReports.reduce((sum, item) => sum + Number(item.visitCustomerCount || 0), 0);
+    weeklyReports.reduce(
+      (sum, item) => sum + Number(item.visitCustomerCount || 0),
+      0
+    );
 
   const totalTripRevenue =
     raw.totalTripRevenue ??
@@ -600,7 +230,10 @@ function extractDashboardData(raw = {}) {
   const totalExpectedRevenue =
     raw.totalExpectedRevenue ??
     metrics.totalExpectedRevenue ??
-    weeklyReports.reduce((sum, item) => sum + Number(item.expectedRevenue || 0), 0);
+    weeklyReports.reduce(
+      (sum, item) => sum + Number(item.expectedRevenue || 0),
+      0
+    );
 
   const activeEmployees =
     raw.activeEmployees ??
@@ -664,13 +297,444 @@ function extractDashboardData(raw = {}) {
   };
 }
 
+function buildStyles() {
+  return `
+    <style>
+      @page {
+        size: A4;
+        margin: 14mm 12mm 14mm 12mm;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #eef3f8;
+        color: ${BRAND.text};
+        font-family: Arial, Helvetica, sans-serif;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      body {
+        padding: 24px;
+      }
+
+      .report-root {
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+
+      .pdf-page {
+        background: ${BRAND.white};
+        border-radius: 18px;
+        padding: 28px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        margin-bottom: 20px;
+        page-break-after: always;
+        break-after: page;
+      }
+
+      .pdf-page:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+
+      .page-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 22px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid ${BRAND.border};
+      }
+
+      .brand-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        max-width: 70%;
+      }
+
+      .brand-logo {
+        width: 56px;
+        height: 56px;
+        object-fit: contain;
+        border-radius: 14px;
+        background: #fff;
+        flex: 0 0 auto;
+      }
+
+      .brand-name {
+        font-size: 24px;
+        font-weight: 800;
+        color: ${BRAND.primary};
+        letter-spacing: 0.4px;
+      }
+
+      .brand-sub {
+        font-size: 13px;
+        color: ${BRAND.muted};
+        margin-top: 4px;
+      }
+
+      .header-right {
+        min-width: 220px;
+        background: ${BRAND.bg};
+        border: 1px solid ${BRAND.border};
+        border-radius: 14px;
+        padding: 12px 14px;
+      }
+
+      .header-page-title {
+        font-size: 14px;
+        font-weight: 800;
+        color: ${BRAND.primary};
+        margin-bottom: 6px;
+      }
+
+      .header-date {
+        font-size: 12px;
+        color: ${BRAND.muted};
+        line-height: 1.6;
+      }
+
+      .hero {
+        background: linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.secondary} 100%);
+        color: white;
+        border-radius: 22px;
+        padding: 28px;
+        margin-bottom: 20px;
+      }
+
+      .hero-label {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        opacity: 0.95;
+        margin-bottom: 10px;
+      }
+
+      .hero-title {
+        font-size: 32px;
+        font-weight: 800;
+        line-height: 1.2;
+        margin-bottom: 10px;
+      }
+
+      .hero-desc {
+        font-size: 14px;
+        line-height: 1.75;
+        opacity: 0.98;
+      }
+
+      .score-box {
+        margin-top: 18px;
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        background: rgba(255,255,255,0.14);
+        border: 1px solid rgba(255,255,255,0.22);
+        border-radius: 16px;
+        padding: 12px 16px;
+      }
+
+      .score-number {
+        font-size: 28px;
+        font-weight: 800;
+      }
+
+      .score-meta {
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .summary-card {
+        background: ${BRAND.bg};
+        border: 1px solid ${BRAND.border};
+        border-radius: 18px;
+        padding: 18px;
+        margin-bottom: 18px;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .section-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: ${BRAND.primary};
+        margin-bottom: 12px;
+      }
+
+      .section-text {
+        font-size: 14px;
+        line-height: 1.75;
+        color: ${BRAND.text};
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .grid-4 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .kpi-card {
+        background: ${BRAND.white};
+        border: 1px solid ${BRAND.border};
+        border-radius: 18px;
+        padding: 16px;
+        min-height: 110px;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .kpi-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: ${BRAND.muted};
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .kpi-value {
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1.15;
+        color: ${BRAND.text};
+        margin-bottom: 8px;
+        word-break: break-word;
+      }
+
+      .kpi-sub {
+        font-size: 12px;
+        color: ${BRAND.muted};
+        line-height: 1.5;
+      }
+
+      .metric-strip {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-top: 8px;
+      }
+
+      .metric-mini {
+        background: ${BRAND.white};
+        border: 1px solid ${BRAND.border};
+        border-radius: 16px;
+        padding: 16px;
+      }
+
+      .metric-mini .name {
+        font-size: 12px;
+        color: ${BRAND.muted};
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .metric-mini .val {
+        font-size: 26px;
+        font-weight: 800;
+      }
+
+      .list {
+        background: ${BRAND.white};
+        border: 1px solid ${BRAND.border};
+        border-radius: 18px;
+        padding: 16px;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .list.success {
+        background: #f0fdf4;
+        border-color: #bbf7d0;
+      }
+
+      .list.danger {
+        background: #fef2f2;
+        border-color: #fecaca;
+      }
+
+      .list-title {
+        font-size: 14px;
+        font-weight: 800;
+        margin-bottom: 12px;
+        color: ${BRAND.text};
+      }
+
+      .list ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .list li {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 13px;
+        line-height: 1.65;
+        margin-bottom: 10px;
+      }
+
+      .list li:last-child {
+        margin-bottom: 0;
+      }
+
+      .bullet {
+        width: 8px;
+        height: 8px;
+        min-width: 8px;
+        border-radius: 999px;
+        background: ${BRAND.secondary};
+        margin-top: 7px;
+      }
+
+      .table-card {
+        background: ${BRAND.white};
+        border: 1px solid ${BRAND.border};
+        border-radius: 18px;
+        padding: 16px;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .ranking-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+        table-layout: fixed;
+      }
+
+      .ranking-table th {
+        text-align: left;
+        padding: 12px 10px;
+        background: ${BRAND.bg};
+        color: ${BRAND.primary};
+        font-size: 12px;
+        border-bottom: 1px solid ${BRAND.border};
+      }
+
+      .ranking-table td {
+        padding: 11px 10px;
+        border-bottom: 1px solid ${BRAND.border};
+        color: ${BRAND.text};
+        vertical-align: top;
+        word-wrap: break-word;
+      }
+
+      .ranking-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .table-empty {
+        text-align: center;
+        color: ${BRAND.muted};
+      }
+
+      .action-card {
+        border: 1px solid ${BRAND.border};
+        border-radius: 18px;
+        padding: 16px;
+        background: ${BRAND.white};
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .action-card .action-title {
+        font-size: 14px;
+        font-weight: 800;
+        color: ${BRAND.primary};
+        margin-bottom: 10px;
+      }
+
+      .action-card .action-body {
+        font-size: 13px;
+        line-height: 1.7;
+        color: ${BRAND.text};
+      }
+
+      .page-footer {
+        margin-top: 18px;
+        display: flex;
+        justify-content: space-between;
+        color: ${BRAND.muted};
+        font-size: 11px;
+        border-top: 1px solid ${BRAND.border};
+        padding-top: 10px;
+      }
+
+      @media print {
+        html, body {
+          background: #ffffff;
+        }
+
+        body {
+          padding: 0;
+        }
+
+        .report-root {
+          max-width: none;
+        }
+
+        .pdf-page {
+          box-shadow: none;
+          border-radius: 0;
+          margin: 0;
+          padding: 0;
+        }
+      }
+    </style>
+  `;
+}
+
+function createPageShell(content, { pageTitle, pageNumber, reportDate, logoUrl }) {
+  return `
+    <section class="pdf-page">
+      <div class="page-header">
+        <div class="brand-left">
+          <img src="${logoUrl}" alt="VP-PHARM Logo" class="brand-logo" />
+          <div>
+            <div class="brand-name">VP-PHARM</div>
+            <div class="brand-sub">AI Weekly Sales Intelligence</div>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="header-page-title">${escapeHtml(pageTitle)}</div>
+          <div class="header-date">Ngày xuất: ${escapeHtml(reportDate)}</div>
+        </div>
+      </div>
+
+      ${content}
+
+      <div class="page-footer">
+        <span>VP-PHARM Executive Report</span>
+        <span>Trang ${pageNumber}/5</span>
+      </div>
+    </section>
+  `;
+}
+
 function buildPages(data) {
   const scoreTag = getScoreLabel(data.healthScore);
 
   const page1 = createPageShell(
     `
       <div class="hero">
-        <div class="hero-label">CEO BRIEF</div>
+        <div class="hero-label">CEO Brief</div>
         <div class="hero-title">Báo cáo điều hành tuần</div>
         <div class="hero-desc">${escapeHtml(data.ceoBrief)}</div>
         <div class="score-box">
@@ -858,13 +922,49 @@ function buildPages(data) {
   return [page1, page2, page3, page4, page5];
 }
 
-async function waitForImages(container) {
-  const images = Array.from(container.querySelectorAll("img"));
+function buildDocumentHtml(data) {
+  const pages = buildPages(data);
+
+  return `
+    <!doctype html>
+    <html lang="vi">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>VP-PHARM Executive Report</title>
+        ${buildStyles()}
+      </head>
+      <body>
+        <div class="report-root">
+          ${pages.join("")}
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+async function waitForWindowReady(printWindow) {
+  await new Promise((resolve) => {
+    const onReady = () => resolve();
+
+    if (printWindow.document.readyState === "complete") {
+      resolve();
+      return;
+    }
+
+    printWindow.onload = onReady;
+    setTimeout(resolve, 1200);
+  });
+
+  const images = Array.from(printWindow.document.images || []);
   await Promise.all(
     images.map(
       (img) =>
         new Promise((resolve) => {
-          if (img.complete) return resolve();
+          if (img.complete) {
+            resolve();
+            return;
+          }
           img.onload = () => resolve();
           img.onerror = () => resolve();
         })
@@ -872,62 +972,28 @@ async function waitForImages(container) {
   );
 }
 
-async function renderPageToCanvas(pageEl) {
-  return html2canvas(pageEl, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: "#ffffff",
-    logging: false,
-  });
-}
-
 export async function exportDashboardPDF(rawData = {}) {
   const data = extractDashboardData(rawData);
-  const pages = buildPages(data);
+  const html = buildDocumentHtml(data);
 
-  const container = document.createElement("div");
-  container.className = "pdf-export-mount";
-  container.style.position = "fixed";
-  container.style.left = "-100000px";
-  container.style.top = "0";
-  container.style.zIndex = "-1";
-  container.style.pointerEvents = "none";
-  container.innerHTML = `
-    ${buildStyles()}
-    <div class="pdf-root">
-      ${pages.join("")}
-    </div>
-  `;
+  const printWindow = window.open("", "_blank", "width=1400,height=900");
 
-  document.body.appendChild(container);
-
-  try {
-    await waitForImages(container);
-
-    const pageNodes = Array.from(container.querySelectorAll(".pdf-page"));
-    const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4",
-      compress: true,
-    });
-
-    for (let i = 0; i < pageNodes.length; i++) {
-      const canvas = await renderPageToCanvas(pageNodes[i]);
-      const imgData = canvas.toDataURL("image/jpeg", 0.92);
-
-      const pdfWidth = 210;
-      const pdfHeight = 297;
-
-      if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
-    }
-
-    const fileName = `VP-PHARM_CEO_BRIEF_${data.reportDate}.pdf`;
-    pdf.save(fileName);
-  } finally {
-    document.body.removeChild(container);
+  if (!printWindow) {
+    window.alert("Trình duyệt đang chặn popup. Vui lòng cho phép popup để xuất PDF.");
+    return;
   }
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+
+  await waitForWindowReady(printWindow);
+
+  printWindow.focus();
+
+  setTimeout(() => {
+    printWindow.print();
+  }, 300);
 }
 
 export default exportDashboardPDF;
