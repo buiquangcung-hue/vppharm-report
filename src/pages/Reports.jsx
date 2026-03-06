@@ -34,8 +34,6 @@ export default function Reports({ isAdmin = false }) {
     const uid = auth.currentUser?.uid || "__none__";
     const base = collection(db, "weekly_reports");
 
-    // Admin: xem tất cả
-    // User: chỉ xem báo cáo của mình
     const qy = isAdmin
       ? query(base, orderBy("createdAt", "desc"), limit(50))
       : query(
@@ -56,8 +54,7 @@ export default function Reports({ isAdmin = false }) {
       },
       (err) => {
         console.error("Reports snapshot error:", err);
-        // Nếu cần tạo index, Firebase sẽ trả lỗi kèm link tạo index
-        setError(err?.message || "Firestore error");
+        setError(err?.message || "Không thể tải dữ liệu báo cáo.");
       }
     );
 
@@ -84,12 +81,10 @@ export default function Reports({ isAdmin = false }) {
         <div className="card-body">
           {error ? (
             <div className="small">
-              <b>Lỗi Firestore:</b> {error}
-              <div style={{ marginTop: 6 }}>
-                Nếu lỗi có nội dung “requires an index”, anh bấm link trong log Firebase để tạo index.
-              </div>
+              Không thể tải dữ liệu báo cáo. Vui lòng thử lại sau.
             </div>
           ) : null}
+
           <div className="row" style={{ marginTop: 8 }}>
             <span className="pill">
               <span className="small">Tổng</span>{" "}
@@ -110,7 +105,6 @@ export default function Reports({ isAdmin = false }) {
           gap: 14,
         }}
       >
-        {/* LEFT LIST */}
         <div className="card">
           <div className="card-header">
             <h2>Danh sách</h2>
@@ -127,7 +121,8 @@ export default function Reports({ isAdmin = false }) {
                 const active = it.id === selectedId;
                 const weekKey = it.weekKey || it?.input?.weekKey || "unknown-week";
                 const created = formatTs(it.createdAt) || "unknown-time";
-                const preview = safeText(it.analysis_text).slice(0, 90) || "(Chưa có analysis_text)";
+                const preview =
+                  safeText(it.analysis_text).slice(0, 90) || "(Chưa có analysis_text)";
 
                 return (
                   <button
@@ -137,8 +132,12 @@ export default function Reports({ isAdmin = false }) {
                     style={{
                       textAlign: "left",
                       width: "100%",
-                      borderColor: active ? "rgba(20,184,166,.55)" : "rgba(255,255,255,.14)",
-                      background: active ? "rgba(255,255,255,.14)" : "rgba(255,255,255,.10)",
+                      borderColor: active
+                        ? "rgba(20,184,166,.55)"
+                        : "rgba(255,255,255,.14)",
+                      background: active
+                        ? "rgba(255,255,255,.14)"
+                        : "rgba(255,255,255,.10)",
                     }}
                     title={it.id}
                   >
@@ -146,11 +145,13 @@ export default function Reports({ isAdmin = false }) {
                       <div style={{ fontWeight: 900 }}>{weekKey}</div>
                       <div className="small">{created}</div>
                     </div>
+
                     {isAdmin ? (
                       <div className="small" style={{ marginTop: 6 }}>
                         Owner: <span className="kbd">{it.ownerEmail || ""}</span>
                       </div>
                     ) : null}
+
                     <div className="small" style={{ marginTop: 6, lineHeight: 1.35 }}>
                       {preview}
                     </div>
@@ -161,7 +162,6 @@ export default function Reports({ isAdmin = false }) {
           </div>
         </div>
 
-        {/* RIGHT DETAILS */}
         <div className="card">
           <div className="card-header">
             <h2>Chi tiết</h2>
@@ -183,8 +183,12 @@ export default function Reports({ isAdmin = false }) {
                     </span>
                   </div>
                   <div>
-                    <b>Tạo lúc:</b> <span className="kbd">{formatTs(selected.createdAt) || "unknown"}</span>
+                    <b>Tạo lúc:</b>{" "}
+                    <span className="kbd">
+                      {formatTs(selected.createdAt) || "unknown"}
+                    </span>
                   </div>
+
                   {isAdmin ? (
                     <div>
                       <b>Owner:</b>{" "}
@@ -197,7 +201,9 @@ export default function Reports({ isAdmin = false }) {
                 <div className="hr" />
 
                 <div>
-                  <div style={{ fontWeight: 900, marginBottom: 8 }}>Báo cáo gốc (Input)</div>
+                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                    Báo cáo gốc (Input)
+                  </div>
                   <pre
                     style={{
                       margin: 0,
@@ -213,7 +219,9 @@ export default function Reports({ isAdmin = false }) {
                 </div>
 
                 <div>
-                  <div style={{ fontWeight: 900, marginBottom: 8 }}>Kết quả AI (Text)</div>
+                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                    Kết quả AI (Text)
+                  </div>
                   <div
                     style={{
                       whiteSpace: "pre-wrap",
