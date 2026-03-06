@@ -3,6 +3,7 @@ import Weekly from "./pages/Weekly.jsx";
 import Reports from "./pages/Reports.jsx";
 import Admin from "./pages/Admin.jsx";
 import AuthModal from "./pages/Auth.jsx";
+import NoticeModal from "./components/NoticeModal.jsx";
 
 import { auth, db } from "./firebase.js";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -22,12 +23,30 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [approval, setApproval] = useState({ approved: false, blocked: false, role: "pending" });
-  const [gateMsg, setGateMsg] = useState("");
+
+  const [notice, setNotice] = useState({
+    open: false,
+    title: "",
+    message: "",
+    type: "info",
+  });
+
+  function showNotice(title, message, type = "info") {
+    setNotice({
+      open: true,
+      title,
+      message,
+      type,
+    });
+  }
+
+  function closeNotice() {
+    setNotice((prev) => ({ ...prev, open: false }));
+  }
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       try {
-        setGateMsg("");
         setReady(false);
 
         if (!u) {
@@ -43,7 +62,6 @@ export default function App() {
         setAuthed(true);
         setUserEmail(u.email || "(no email)");
 
-        // Ensure profile in Firestore
         const ref = doc(db, "users", u.uid);
         const snap = await getDoc(ref);
 
@@ -58,16 +76,13 @@ export default function App() {
           });
         }
 
-        // Re-read after ensure
-        const snap2 = (snap.exists() ? snap : await getDoc(ref));
+        const snap2 = snap.exists() ? snap : await getDoc(ref);
         const profile = snap2.data() || {};
 
-        // Admin auto-promote by email
         if ((u.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
           setIsAdmin(true);
           setApproval({ approved: true, blocked: false, role: "admin" });
 
-          // đảm bảo doc cũng admin/approved (idempotent)
           await setDoc(
             ref,
             {
@@ -75,6 +90,7 @@ export default function App() {
               role: "admin",
               approved: true,
               blocked: false,
+              status: "active",
               approvedAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             },
@@ -90,10 +106,18 @@ export default function App() {
         const blocked = !!profile.blocked;
 
         setIsAdmin(false);
-        setApproval({ approved, blocked, role: profile.role || (approved ? "user" : "pending") });
+        setApproval({
+          approved,
+          blocked,
+          role: profile.role || (approved ? "user" : "pending"),
+        });
 
         if (blocked) {
-          setGateMsg("Tài khoản của bạn đã bị chặn. Vui lòng liên hệ Admin.");
+          showNotice(
+            "Tài khoản bị chặn",
+            "Tài khoản của bạn hiện đã bị chặn.\nVui lòng liên hệ Admin để được hỗ trợ.",
+            "error"
+          );
           await signOut(auth);
           setAuthOpen(true);
           setReady(true);
@@ -101,18 +125,21 @@ export default function App() {
         }
 
         if (!approved) {
-          setGateMsg("Tài khoản đang chờ Admin duyệt. Bạn sẽ được cấp quyền sau khi duyệt.");
+          showNotice(
+            "Đang chờ phê duyệt",
+            "Tài khoản của bạn đã được tạo thành công nhưng đang chờ Admin duyệt.\nVui lòng quay lại sau.",
+            "warning"
+          );
           await signOut(auth);
           setAuthOpen(true);
           setReady(true);
           return;
         }
 
-        // approved user
         setAuthOpen(false);
         setReady(true);
       } catch (e) {
-        setGateMsg(String(e?.message || e));
+        showNotice("Có lỗi xảy ra", String(e?.message || e), "error");
         setReady(true);
       }
     });
@@ -123,6 +150,7 @@ export default function App() {
   async function logout() {
     await signOut(auth);
     setAuthOpen(true);
+    showNotice("Đăng xuất thành công", "Bạn đã đăng xuất khỏi hệ thống.", "success");
   }
 
   if (!ready) {
@@ -158,15 +186,25 @@ export default function App() {
 
             {showApp ? (
               <>
-                <button className="btn secondary" onClick={() => setTab("weekly")}>Weekly</button>
-                <button className="btn secondary" onClick={() => setTab("reports")}>Reports</button>
+                <button className="btn secondary" onClick={() => setTab("weekly")}>
+                  Weekly
+                </button>
+                <button className="btn secondary" onClick={() => setTab("reports")}>
+                  Reports
+                </button>
                 {isAdmin ? (
-                  <button className="btn secondary" onClick={() => setTab("admin")}>Admin</button>
+                  <button className="btn secondary" onClick={() => setTab("admin")}>
+                    Admin
+                  </button>
                 ) : null}
-                <button className="btn secondary" onClick={logout}>Đăng xuất</button>
+                <button className="btn secondary" onClick={logout}>
+                  Đăng xuất
+                </button>
               </>
             ) : (
-              <button className="btn" onClick={() => setAuthOpen(true)}>Đăng nhập</button>
+              <button className="btn" onClick={() => setAuthOpen(true)}>
+                Đăng nhập
+              </button>
             )}
           </div>
         </div>
@@ -178,9 +216,11 @@ export default function App() {
             <div className="card-body">
               <h2 style={{ marginTop: 0 }}>Chưa có quyền truy cập</h2>
               <p className="small">
-                {gateMsg || "Vui lòng đăng nhập. Tài khoản mới cần Admin duyệt trước khi sử dụng."}
+                Vui lòng đăng nhập. Tài khoản mới cần Admin duyệt trước khi sử dụng.
               </p>
-              <button className="btn" onClick={() => setAuthOpen(true)}>Mở đăng nhập</button>
+              <button className="btn" onClick={() => setAuthOpen(true)}>
+                Mở đăng nhập
+              </button>
               <div className="hr" />
               <div className="small">
                 Admin: <span className="kbd">{ADMIN_EMAIL}</span>
@@ -196,18 +236,24 @@ export default function App() {
         )}
       </div>
 
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+      <AuthModal open={authOpen} />
+      <NoticeModal
+        open={notice.open}
+        title={notice.title}
+        message={notice.message}
+        type={notice.type}
+        onClose={closeNotice}
+      />
 
       <footer>
         <div className="container">
           <div className="small">
             <b>CÔNG TY CỔ PHẦN DƯỢC VP-PHARM</b>
             <br />
-            Địa chỉ: Lô B1.4-LK12 - KĐT Thanh Hà, Xã Bình Minh, TP Hà Nội, Việt Nam
+            Địa chỉ: Lô B1.4-LK12 - KĐT Thanh Hà, Xã Bình Minh, TP Hà Nội
             <br />
             Điện thoại: 0975 498 284
-            <br />
-            </div>
+          </div>
         </div>
       </footer>
     </div>

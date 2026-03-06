@@ -36,6 +36,7 @@ export default function AuthModal({ open }) {
       setLoading(true);
 
       const e = email.trim();
+
       if (!e) {
         show("Vui lòng nhập email.");
         return;
@@ -58,18 +59,22 @@ export default function AuthModal({ open }) {
           show("Vui lòng nhập Họ và tên.");
           return;
         }
+
         if (!department.trim()) {
           show("Vui lòng nhập Bộ phận.");
           return;
         }
+
         if (!phone.trim()) {
           show("Vui lòng nhập Số điện thoại.");
           return;
         }
+
         if (pass.length < 8) {
           show("Mật khẩu tối thiểu 8 ký tự.");
           return;
         }
+
         if (pass !== pass2) {
           show("Mật khẩu nhập lại không khớp.");
           return;
@@ -198,10 +203,19 @@ export default function AuthModal({ open }) {
 
           {mode === "login" ? (
             <div className="row" style={{ justifyContent: "space-between" }}>
-              <button className="btn secondary" disabled={loading} onClick={() => setMode("forgot")}>
+              <button
+                className="btn secondary"
+                disabled={loading}
+                onClick={() => setMode("forgot")}
+              >
                 Quên mật khẩu
               </button>
-              <button className="btn secondary" disabled={loading} onClick={() => setMode("signup")}>
+
+              <button
+                className="btn secondary"
+                disabled={loading}
+                onClick={() => setMode("signup")}
+              >
                 Tạo tài khoản
               </button>
             </div>
@@ -217,7 +231,18 @@ export default function AuthModal({ open }) {
           )}
 
           {msg ? (
-            <div className="small" style={{ marginTop: 12 }}>
+            <div
+              style={{
+                marginTop: 12,
+                padding: "12px 14px",
+                borderRadius: 14,
+                background: "rgba(255,255,255,.08)",
+                border: "1px solid rgba(255,255,255,.12)",
+                textAlign: "center",
+                fontSize: 13,
+                lineHeight: 1.5,
+              }}
+            >
               {msg}
             </div>
           ) : null}
@@ -235,6 +260,7 @@ export default function AuthModal({ open }) {
 
 function humanizeAuthError(e) {
   const code = e?.code || "";
+
   if (code === "auth/invalid-credential") return "Sai email hoặc mật khẩu.";
   if (code === "auth/user-not-found") return "Không tìm thấy tài khoản.";
   if (code === "auth/wrong-password") return "Sai mật khẩu.";
@@ -242,5 +268,6 @@ function humanizeAuthError(e) {
   if (code === "auth/weak-password") return "Mật khẩu quá yếu.";
   if (code === "auth/invalid-email") return "Email không hợp lệ.";
   if (code === "auth/too-many-requests") return "Quá nhiều yêu cầu, vui lòng thử lại sau.";
+
   return e?.message || "Có lỗi xảy ra.";
 }
