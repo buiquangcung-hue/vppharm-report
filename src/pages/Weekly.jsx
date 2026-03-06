@@ -172,10 +172,7 @@ function toPlainTextAnalysis(analysisJson, fallbackText) {
     "ĐÁNH GIÁ NHÂN VIÊN",
     analysisJson.employeeAssessment || analysisJson.employeePerformance
   );
-  pushSection(
-    "ĐÁNH GIÁ ĐỘ PHỦ THỊ TRƯỜNG",
-    analysisJson.coverageAssessment || analysisJson.marketCoverage
-  );
+  pushSection("ĐÁNH GIÁ THỊ TRƯỜNG", analysisJson.coverageAssessment || analysisJson.marketCoverage);
   pushSection(
     "ĐÁNH GIÁ DOANH SỐ",
     analysisJson.salesAssessment || analysisJson.salesPotential
@@ -378,7 +375,6 @@ const initialForm = {
   employeeWeaknesses: "",
 
   assignedCustomerCount: "",
-  unexploredCustomerCount: "",
   totalMarketCustomerCount: "",
 
   productLines: [],
@@ -598,12 +594,12 @@ export default function Weekly({
   function startFakeProgress() {
     const progressSteps = [
       { text: "Đang tải file Excel lên hệ thống...", percent: 12 },
-      { text: "Đang chuẩn hóa dữ liệu chuyến đi...", percent: 22 },
-      { text: "Đang gửi dữ liệu sang AI phân tích...", percent: 36 },
-      { text: "Đang đọc dữ liệu báo cáo tuần...", percent: 48 },
-      { text: "Đang đánh giá độ phủ thị trường...", percent: 60 },
-      { text: "Đang phân tích doanh số và cơ hội...", percent: 72 },
-      { text: "Đang tổng hợp nhận định quản lý...", percent: 84 },
+      { text: "Đang chuẩn hóa dữ liệu chuyến đi...", percent: 24 },
+      { text: "Đang gửi dữ liệu sang AI phân tích...", percent: 38 },
+      { text: "Đang đọc dữ liệu tình hình thực hiện đơn hàng...", percent: 50 },
+      { text: "Đang đánh giá hiệu quả chuyến đi...", percent: 64 },
+      { text: "Đang phân tích doanh số và cơ hội...", percent: 76 },
+      { text: "Đang tổng hợp nhận định quản lý...", percent: 88 },
       { text: "Đang hoàn thiện kết quả AI...", percent: 92 },
     ];
 
@@ -677,10 +673,6 @@ export default function Weekly({
         throw new Error("Vui lòng nhập tổng số khách hàng TDV phụ trách.");
       }
 
-      if (String(form.unexploredCustomerCount).trim() === "") {
-        throw new Error("Vui lòng nhập số khách hàng chưa khai thác.");
-      }
-
       if (String(form.totalMarketCustomerCount).trim() === "") {
         throw new Error("Vui lòng nhập tổng số khách hàng trên toàn địa bàn.");
       }
@@ -694,14 +686,7 @@ export default function Weekly({
       }
 
       const assignedCustomerCount = toNumber(form.assignedCustomerCount);
-      const unexploredCustomerCount = toNumber(form.unexploredCustomerCount);
       const totalMarketCustomerCount = toNumber(form.totalMarketCustomerCount);
-
-      if (unexploredCustomerCount > assignedCustomerCount) {
-        throw new Error(
-          "Số khách hàng chưa khai thác không thể lớn hơn tổng số khách hàng TDV phụ trách."
-        );
-      }
 
       if (assignedCustomerCount > totalMarketCustomerCount) {
         throw new Error(
@@ -722,7 +707,9 @@ export default function Weekly({
       }
 
       if (!form.excelFile) {
-        throw new Error("Vui lòng tải lên file báo cáo doanh số tuần.");
+        throw new Error(
+          "Vui lòng tải lên file tình hình thực hiện đơn đặt hàng của chuyến đi."
+        );
       }
 
       setProgressText("Đang tải file Excel lên hệ thống...");
@@ -762,7 +749,6 @@ export default function Weekly({
         employeeWeaknesses: String(form.employeeWeaknesses || "").trim(),
 
         assignedCustomerCount,
-        unexploredCustomerCount,
         totalMarketCustomerCount,
 
         productLines: form.productLines.map((item) => ({
@@ -841,7 +827,6 @@ export default function Weekly({
         employeeWeaknesses: String(form.employeeWeaknesses || "").trim(),
 
         assignedCustomerCount,
-        unexploredCustomerCount,
         totalMarketCustomerCount,
 
         productLines: reportPayload.productLines,
@@ -897,7 +882,7 @@ export default function Weekly({
     return (
       <div className="card">
         <div className="card-body">
-          <div className="small">Đang tải danh mục báo cáo tuần…</div>
+          <div className="small">Đang tải danh mục tạo báo cáo…</div>
         </div>
       </div>
     );
@@ -935,7 +920,7 @@ export default function Weekly({
           >
             <span>VP-PHARM</span>
             <span style={{ opacity: 0.6 }}>•</span>
-            <span>{isAdmin ? "ADMIN" : "DIRECTOR"}</span>
+            <span>{isAdmin ? "QUẢN TRỊ" : "GIÁM ĐỐC KINH DOANH"}</span>
           </div>
 
           <h2
@@ -945,7 +930,7 @@ export default function Weekly({
               letterSpacing: 0.4,
             }}
           >
-            BÁO CÁO ĐI THỊ TRƯỜNG TUẦN
+            TẠO BÁO CÁO TUẦN LÀM VIỆC
           </h2>
           <p>Nhập dữ liệu chuyến đi, AI phân tích và lưu trữ báo cáo điều hành.</p>
         </div>
@@ -971,7 +956,11 @@ export default function Weekly({
             <StatCard
               title="Nhân viên khả dụng"
               value={employees.length}
-              sub={isAdmin ? "Admin thấy toàn bộ nhân viên active" : "Giám đốc chỉ thấy nhân viên thuộc team mình"}
+              sub={
+                isAdmin
+                  ? "Quản trị thấy toàn bộ nhân viên đang hoạt động"
+                  : "Giám đốc chỉ thấy nhân viên thuộc đội phụ trách"
+              }
             />
             <StatCard
               title="Sản phẩm đang hoạt động"
@@ -1088,7 +1077,7 @@ export default function Weekly({
               <div className="card-body">
                 <SectionTitle
                   title="Hiệu quả chuyến đi"
-                  subtitle="Ghi nhận độ phủ khách hàng, doanh số và quy mô thị trường."
+                  subtitle="Ghi nhận tình hình viếng thăm, doanh số và quy mô thị trường."
                 />
 
                 <div className="grid two">
@@ -1136,32 +1125,23 @@ export default function Weekly({
                   </div>
 
                   <div>
-                    <FieldLabel required>Số khách hàng chưa khai thác</FieldLabel>
+                    <FieldLabel required>Tổng số khách hàng trên toàn địa bàn</FieldLabel>
                     <input
                       type="number"
                       min="0"
                       required
-                      value={form.unexploredCustomerCount}
+                      value={form.totalMarketCustomerCount}
                       onChange={(e) =>
-                        updateField("unexploredCustomerCount", e.target.value)
+                        updateField("totalMarketCustomerCount", e.target.value)
                       }
                       disabled={loading}
                     />
                   </div>
                 </div>
 
-                <div style={{ marginTop: 12 }}>
-                  <FieldLabel required>Tổng số khách hàng trên toàn địa bàn</FieldLabel>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={form.totalMarketCustomerCount}
-                    onChange={(e) =>
-                      updateField("totalMarketCustomerCount", e.target.value)
-                    }
-                    disabled={loading}
-                  />
+                <div className="small" style={{ marginTop: 10, lineHeight: 1.6 }}>
+                  Lưu ý: Hệ thống không còn dùng chỉ tiêu “khách hàng chưa khai thác” để tránh
+                  sai lệch do khác cách hiểu giữa các báo cáo thực tế.
                 </div>
               </div>
             </div>
@@ -1327,11 +1307,11 @@ export default function Weekly({
               <div className="card-body">
                 <SectionTitle
                   title="File Excel đối soát"
-                  subtitle="Tải lên file Excel báo cáo tuần từ ERP VP-PHARM để lưu cùng báo cáo AI."
+                  subtitle="Tải lên file Excel từ ERP VP-PHARM để lưu cùng báo cáo AI."
                 />
 
                 <FieldLabel required>
-                  Nhập file báo cáo doanh số tuần làm việc (Excel từ ERP VP-PHARM)
+                  Nhập file Tình hình thực hiện đơn đặt hàng của chuyến đi (Excel từ ERP VP-PHARM)
                 </FieldLabel>
                 <input
                   required
@@ -1448,7 +1428,9 @@ export default function Weekly({
           >
             KẾT QUẢ PHÂN TÍCH BÁO CÁO BẰNG AI
           </h2>
-          <p>Tổng hợp đánh giá điều hành từ dữ liệu báo cáo tuần và file Excel đính kèm.</p>
+          <p>
+            Tổng hợp đánh giá điều hành từ dữ liệu chuyến đi và file Excel đính kèm.
+          </p>
         </div>
 
         <div className="card-body">
@@ -1484,7 +1466,7 @@ export default function Weekly({
 
               <div className="grid two">
                 <AnalysisSection
-                  title="Đánh giá độ phủ thị trường"
+                  title="Đánh giá thị trường"
                   data={analysisJson.coverageAssessment || analysisJson.marketCoverage}
                 />
                 <AnalysisSection
@@ -1551,7 +1533,7 @@ export default function Weekly({
                   letterSpacing: 0.3,
                 }}
               >
-                Xem JSON cấu trúc
+                Xem dữ liệu JSON cấu trúc
               </summary>
               <pre
                 style={{

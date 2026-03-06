@@ -430,7 +430,7 @@ function TrendCard({ data }) {
     return (
       <SectionCard
         title="Xu hướng doanh số theo tuần"
-        subtitle="Theo weekFrom của báo cáo"
+        subtitle="Theo tuần làm việc của báo cáo"
         icon={<TrendingUp size={18} />}
       >
         <div className="small">Chưa có dữ liệu xu hướng.</div>
@@ -441,7 +441,7 @@ function TrendCard({ data }) {
   return (
     <SectionCard
       title="Xu hướng doanh số theo tuần"
-      subtitle="Theo weekFrom của báo cáo"
+      subtitle="Theo tuần làm việc của báo cáo"
       icon={<TrendingUp size={18} />}
     >
       <div style={{ width: "100%", height: 320 }}>
@@ -676,7 +676,7 @@ export default function Dashboard({
         setError("");
       } catch (e) {
         console.error(e);
-        setError("Không thể tải dashboard.");
+        setError("Không thể tải tổng quan.");
       }
     }
 
@@ -754,11 +754,11 @@ export default function Dashboard({
     const currentVisits = sumBy(currentReports, (r) => r.visitCustomerCount);
     const prevVisits = sumBy(previousReports, (r) => r.visitCustomerCount);
 
-    const coverageRates = currentReports.map((r) => {
+    const activityRates = currentReports.map((r) => {
+      const visits = Number(r.visitCustomerCount || 0);
       const assigned = Number(r.assignedCustomerCount || 0);
-      const unexplored = Number(r.unexploredCustomerCount || 0);
       if (assigned <= 0) return 0;
-      return ((assigned - unexplored) / assigned) * 100;
+      return (visits / assigned) * 100;
     });
 
     const productivityRates = currentReports.map((r) => {
@@ -775,7 +775,7 @@ export default function Dashboard({
       return (assigned / total) * 100;
     });
 
-    const coverageScore = clamp(average(coverageRates), 0, 100);
+    const coverageScore = clamp(average(activityRates), 0, 100);
     const salesQualityScore = clamp(average(productivityRates), 0, 100);
     const marketExecutionScore = clamp(average(marketControlRates), 0, 100);
     const healthScore = Math.round(
@@ -859,11 +859,11 @@ export default function Dashboard({
     const executiveActions = [];
 
     if (healthScore >= 80) {
-      executiveWins.push(`Sức khỏe điều hành đang ở mức tốt với AI Health Score ${healthScore}/100.`);
+      executiveWins.push(`Sức khỏe điều hành đang ở mức tốt với chỉ số AI ${healthScore}/100.`);
     } else if (healthScore >= 60) {
-      executiveWarnings.push(`AI Health Score đang ở mức theo dõi: ${healthScore}/100.`);
+      executiveWarnings.push(`Chỉ số sức khỏe điều hành AI đang ở mức theo dõi: ${healthScore}/100.`);
     } else {
-      executiveWarnings.push(`AI Health Score đang ở mức cảnh báo: ${healthScore}/100.`);
+      executiveWarnings.push(`Chỉ số sức khỏe điều hành AI đang ở mức cảnh báo: ${healthScore}/100.`);
     }
 
     if (currentTripRevenue >= prevTripRevenue) {
@@ -898,7 +898,7 @@ export default function Dashboard({
 
     if (coverageScore < 70) {
       executiveActions.push(
-        "Ưu tiên nâng độ phủ khách hàng tại các địa bàn còn nhiều khách chưa khai thác."
+        "Cần nâng mật độ viếng thăm trên tệp khách hàng đang phụ trách để tăng hiệu quả hoạt động."
       );
     }
 
@@ -910,7 +910,7 @@ export default function Dashboard({
 
     if (marketExecutionScore < 60) {
       executiveActions.push(
-        "Đánh giá lại phân bổ khách hàng phụ trách so với tổng khách toàn địa bàn."
+        "Đánh giá lại mức độ bao phủ khách hàng phụ trách so với tổng quy mô khách hàng toàn địa bàn."
       );
     }
 
@@ -1001,7 +1001,7 @@ export default function Dashboard({
       `Tổng lượt viếng thăm khách hàng đạt ${analytics.visits}, doanh số chuyến đi đạt ${formatVND(
         analytics.tripRevenue
       )}, doanh số dự kiến đạt ${formatVND(analytics.expectedRevenue)}.`,
-      `AI Health Score hiện ở mức ${analytics.healthScore}/100, phản ánh trạng thái điều hành ${scoreColor(
+      `Chỉ số sức khỏe điều hành AI hiện ở mức ${analytics.healthScore}/100, phản ánh trạng thái điều hành ${scoreColor(
         analytics.healthScore
       ).toLowerCase()}.`,
       analytics.executiveWins[0] || analytics.executiveWarnings[0] || "",
@@ -1091,7 +1091,7 @@ export default function Dashboard({
     return (
       <div className="card">
         <div className="card-body">
-          <h2 style={{ marginTop: 0 }}>Không có quyền xem Dashboard</h2>
+          <h2 style={{ marginTop: 0 }}>Không có quyền xem tổng quan</h2>
           <p className="small">Chức năng này dành cho Admin hoặc Giám đốc kinh doanh.</p>
         </div>
       </div>
@@ -1103,12 +1103,12 @@ export default function Dashboard({
       <div className="card">
         <div className="card-header" style={{ textAlign: "center" }}>
           <h2 style={{ textTransform: "uppercase", letterSpacing: 0.6 }}>
-            DASHBOARD ĐIỀU HÀNH BÁO CÁO TUẦN
+            TỔNG QUAN ĐIỀU HÀNH BÁO CÁO TUẦN
           </h2>
           <p>
             {isAdmin
               ? "Tổng hợp toàn bộ dữ liệu báo cáo và phân tích AI trong hệ thống"
-              : "Tổng hợp dữ liệu báo cáo và phân tích AI của team phụ trách"}
+              : "Tổng hợp dữ liệu báo cáo và phân tích AI của đội phụ trách"}
           </p>
         </div>
 
@@ -1131,7 +1131,7 @@ export default function Dashboard({
 
           <SectionCard
             title="Bộ lọc thời gian"
-            subtitle="Lọc dashboard theo giai đoạn và tự động so sánh với kỳ trước"
+            subtitle="Lọc tổng quan theo giai đoạn và tự động so sánh với kỳ trước"
             icon={<CalendarRange size={18} />}
           >
             <div className="row" style={{ marginBottom: 12 }}>
@@ -1229,10 +1229,10 @@ export default function Dashboard({
 
       <div id="ceo-brief">
         <SectionCard
-          title="CEO Brief / Executive Brief"
-          subtitle={`Tóm tắt điều hành nhanh trong kỳ ${formatVNDate(
-            analytics.from
-          )} → ${formatVNDate(analytics.to)}`}
+          title="Tóm Tắt Điều Hành"
+          subtitle={`Tóm tắt nhanh trong kỳ ${formatVNDate(analytics.from)} → ${formatVNDate(
+            analytics.to
+          )}`}
           icon={<BriefcaseBusiness size={18} />}
         >
           <div className="grid two" style={{ marginBottom: 14 }}>
@@ -1246,7 +1246,7 @@ export default function Dashboard({
               }}
             >
               <div className="small" style={{ color: healthTone.text }}>
-                AI Health Score
+                Chỉ số sức khỏe điều hành AI
               </div>
               <div style={{ fontWeight: 900, fontSize: 34, marginTop: 8 }}>
                 {analytics.healthScore}/100
@@ -1264,22 +1264,22 @@ export default function Dashboard({
                 sub={`Biến động ${formatPct(analytics.reportChange)} so với kỳ trước`}
               />
               <ExecutiveItem
-                title="Độ phủ khách hàng"
+                title="Mức độ hoạt động"
                 value={`${analytics.coverageScore}/100`}
                 level={analytics.coverageStatus}
-                sub="Đánh giá từ assigned / unexplored"
+                sub="Đánh giá từ số lượt viếng thăm trên tệp khách hàng phụ trách"
               />
               <ExecutiveItem
                 title="Chất lượng doanh số"
                 value={`${analytics.salesQualityScore}/100`}
                 level={analytics.salesStatus}
-                sub="So sánh tripRevenue với totalExpectedRevenue"
+                sub="So sánh doanh số chuyến đi với doanh số dự kiến"
               />
               <ExecutiveItem
                 title="Kiểm soát thị trường"
                 value={`${analytics.marketExecutionScore}/100`}
                 level={analytics.marketStatus}
-                sub="Tỷ lệ assignedCustomerCount trên totalMarketCustomerCount"
+                sub="Tỷ lệ khách hàng phụ trách trên tổng khách hàng toàn địa bàn"
               />
             </div>
           </div>
@@ -1332,34 +1332,34 @@ export default function Dashboard({
           icon={<HandCoins size={18} />}
           title="Doanh số chuyến đi"
           value={formatVND(analytics.tripRevenue)}
-          sub="Cộng từ tripRevenue"
+          sub="Cộng từ doanh số thực hiện"
           change={analytics.tripRevenueChange}
         />
         <KpiCard
           icon={<TrendingUp size={18} />}
           title="Doanh số dự kiến"
           value={formatVND(analytics.expectedRevenue)}
-          sub="Cộng từ totalExpectedRevenue"
+          sub="Cộng từ cơ cấu mặt hàng"
           change={analytics.expectedRevenueChange}
         />
         <KpiCard
           icon={<Users size={18} />}
           title="Nhân viên hoạt động"
           value={analytics.employeeCount}
-          sub="Danh mục nhân viên active"
+          sub="Danh mục nhân viên đang hoạt động"
         />
       </div>
 
       <div className="grid two">
         <SectionCard
-          title="AI Health Score"
-          subtitle="Điểm sức khỏe điều hành tổng hợp từ độ phủ, chất lượng doanh số và kiểm soát thị trường"
+          title="Chỉ Số Sức Khỏe Điều Hành AI"
+          subtitle="Điểm tổng hợp từ mức độ hoạt động, chất lượng doanh số và kiểm soát thị trường"
           icon={<Activity size={18} />}
         >
           <div className="grid two">
             <KpiCard
               icon={<Target size={18} />}
-              title="Health Score"
+              title="Điểm sức khỏe"
               value={`${analytics.healthScore}/100`}
               sub={scoreColor(analytics.healthScore)}
             />
@@ -1376,15 +1376,15 @@ export default function Dashboard({
               <div className="small">Chi tiết điểm</div>
               <div className="row">
                 <span className="pill">
-                  <span className="small">Coverage</span>{" "}
+                  <span className="small">Mức độ hoạt động</span>{" "}
                   <span className="kbd">{analytics.coverageScore}/100</span>
                 </span>
                 <span className="pill">
-                  <span className="small">Sales Quality</span>{" "}
+                  <span className="small">Chất lượng doanh số</span>{" "}
                   <span className="kbd">{analytics.salesQualityScore}/100</span>
                 </span>
                 <span className="pill">
-                  <span className="small">Market Execution</span>{" "}
+                  <span className="small">Kiểm soát thị trường</span>{" "}
                   <span className="kbd">{analytics.marketExecutionScore}/100</span>
                 </span>
               </div>

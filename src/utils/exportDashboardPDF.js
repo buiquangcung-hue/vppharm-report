@@ -51,14 +51,8 @@ function escapeHtml(str) {
     .replaceAll("'", "&#039;");
 }
 
-function safeText(value, fallback = "Chưa có dữ liệu") {
-  if (value === null || value === undefined) return fallback;
-  const s = String(value).trim();
-  return s || fallback;
-}
-
 function getHealthScore(metrics = {}) {
-  const coverage = Number(metrics.coverageScore ?? metrics.coverage ?? 0);
+  const activity = Number(metrics.coverageScore ?? metrics.coverage ?? 0);
   const salesQuality = Number(
     metrics.salesQualityScore ?? metrics.salesQuality ?? 0
   );
@@ -66,7 +60,7 @@ function getHealthScore(metrics = {}) {
     metrics.marketExecutionScore ?? metrics.marketExecution ?? 0
   );
 
-  const values = [coverage, salesQuality, marketExecution].filter(
+  const values = [activity, salesQuality, marketExecution].filter(
     (v) => !Number.isNaN(v) && v >= 0
   );
 
@@ -108,7 +102,7 @@ function buildExecutiveSummary({
     totalTripRevenue
   )}, doanh số dự kiến đạt ${formatCurrency(
     totalExpectedRevenue
-  )}. AI Health Score hiện ở mức ${score}/100, phản ánh bức tranh điều hành ${state}.`;
+  )}. Chỉ số sức khỏe điều hành AI hiện ở mức ${score}/100, phản ánh bức tranh điều hành ${state}.`;
 }
 
 function cardKPI(label, value, sub = "") {
@@ -238,7 +232,11 @@ function extractDashboardData(raw = {}) {
   const activeEmployees =
     raw.activeEmployees ??
     metrics.activeEmployees ??
-    new Set(weeklyReports.map((x) => x.employee).filter(Boolean)).size;
+    new Set(
+      weeklyReports
+        .map((x) => x.employee?.name || x.employeeName || x.employee)
+        .filter(Boolean)
+    ).size;
 
   const healthScore =
     raw.healthScore ?? metrics.healthScore ?? getHealthScore(metrics);
@@ -721,7 +719,7 @@ function createPageShell(content, { pageTitle, pageNumber, reportDate, logoUrl }
       ${content}
 
       <div class="page-footer">
-        <span>VP-PHARM Executive Report</span>
+        <span>Báo cáo điều hành VP-PHARM</span>
         <span>Trang ${pageNumber}/5</span>
       </div>
     </section>
@@ -734,20 +732,20 @@ function buildPages(data) {
   const page1 = createPageShell(
     `
       <div class="hero">
-        <div class="hero-label">CEO Brief</div>
+        <div class="hero-label">Tóm tắt điều hành</div>
         <div class="hero-title">Báo cáo điều hành tuần</div>
         <div class="hero-desc">${escapeHtml(data.ceoBrief)}</div>
         <div class="score-box">
           <div class="score-number">${data.healthScore}/100</div>
           <div class="score-meta">
-            <div><strong>AI Health Score</strong></div>
+            <div><strong>Chỉ số sức khỏe điều hành AI</strong></div>
             <div>${escapeHtml(scoreTag.label)}</div>
           </div>
         </div>
       </div>
 
       <div class="summary-card">
-        <div class="section-title">Executive Summary</div>
+        <div class="section-title">Tóm tắt tổng quan</div>
         <div class="section-text">
           ${escapeHtml(
             buildExecutiveSummary({
@@ -763,12 +761,12 @@ function buildPages(data) {
       </div>
 
       <div class="grid-2">
-        ${listBlock("Executive Wins", data.executiveWins, "success")}
-        ${listBlock("Executive Warnings", data.executiveWarnings, "danger")}
+        ${listBlock("Điểm tốt nổi bật", data.executiveWins, "success")}
+        ${listBlock("Cảnh báo điều hành", data.executiveWarnings, "danger")}
       </div>
     `,
     {
-      pageTitle: "Trang 1 · CEO Brief",
+      pageTitle: "Trang 1 · Tóm tắt điều hành",
       pageNumber: 1,
       reportDate: data.reportDate,
       logoUrl: data.logoUrl,
@@ -777,50 +775,50 @@ function buildPages(data) {
 
   const page2 = createPageShell(
     `
-      <div class="section-title">KPI Overview</div>
+      <div class="section-title">Tổng quan chỉ số</div>
 
       <div class="grid-4" style="margin-bottom:16px;">
         ${cardKPI("Tổng báo cáo", formatNumber(data.totalReports), "Số báo cáo tuần đã ghi nhận")}
         ${cardKPI("Tổng khách viếng thăm", formatNumber(data.totalVisits), "Lượt tiếp cận khách hàng")}
         ${cardKPI("Doanh số chuyến đi", formatCurrency(data.totalTripRevenue), "Doanh số đã thực hiện")}
-        ${cardKPI("Doanh số dự kiến", formatCurrency(data.totalExpectedRevenue), "Pipeline kỳ tới")}
+        ${cardKPI("Doanh số dự kiến", formatCurrency(data.totalExpectedRevenue), "Tổng từ cơ cấu mặt hàng")}
         ${cardKPI("Nhân viên hoạt động", formatNumber(data.activeEmployees), "Có báo cáo trong kỳ")}
-        ${cardKPI("AI Health Score", `${data.healthScore}/100`, scoreTag.label)}
+        ${cardKPI("Chỉ số sức khỏe điều hành AI", `${data.healthScore}/100`, scoreTag.label)}
       </div>
 
       <div class="summary-card">
-        <div class="section-title">Health Score Composition</div>
+        <div class="section-title">Cơ cấu chỉ số sức khỏe</div>
         <div class="metric-strip">
           <div class="metric-mini">
-            <div class="name">Coverage</div>
+            <div class="name">Mức độ hoạt động</div>
             <div class="val">${formatPercent(data.coverageScore)}</div>
           </div>
           <div class="metric-mini">
-            <div class="name">Sales Quality</div>
+            <div class="name">Chất lượng doanh số</div>
             <div class="val">${formatPercent(data.salesQualityScore)}</div>
           </div>
           <div class="metric-mini">
-            <div class="name">Market Execution</div>
+            <div class="name">Kiểm soát thị trường</div>
             <div class="val">${formatPercent(data.marketExecutionScore)}</div>
           </div>
         </div>
       </div>
 
       <div class="summary-card">
-        <div class="section-title">Executive Interpretation</div>
+        <div class="section-title">Diễn giải điều hành</div>
         <div class="section-text">
-          AI Health Score hiện đạt <strong>${data.healthScore}/100</strong>, trong đó Coverage = ${formatPercent(
+          Chỉ số sức khỏe điều hành AI hiện đạt <strong>${data.healthScore}/100</strong>, trong đó Mức độ hoạt động = ${formatPercent(
       data.coverageScore
-    )}, Sales Quality = ${formatPercent(
+    )}, Chất lượng doanh số = ${formatPercent(
       data.salesQualityScore
-    )}, Market Execution = ${formatPercent(
+    )}, Kiểm soát thị trường = ${formatPercent(
       data.marketExecutionScore
-    )}. Đây là chỉ báo tổng hợp để Ban điều hành theo dõi độ phủ, chất lượng bán hàng và khả năng triển khai thị trường.
+    )}. Đây là chỉ báo tổng hợp để Ban điều hành theo dõi cường độ hoạt động bán hàng, chất lượng doanh số và mức độ bao phủ thị trường.
         </div>
       </div>
     `,
     {
-      pageTitle: "Trang 2 · KPI Overview",
+      pageTitle: "Trang 2 · Tổng quan chỉ số",
       pageNumber: 2,
       reportDate: data.reportDate,
       logoUrl: data.logoUrl,
@@ -829,20 +827,20 @@ function buildPages(data) {
 
   const page3 = createPageShell(
     `
-      <div class="section-title">AI Insight</div>
+      <div class="section-title">Nhận định từ AI</div>
 
       <div class="grid-2" style="margin-bottom:16px;">
-        ${listBlock("Key Insights", data.insights)}
-        ${listBlock("Opportunities", data.opportunities, "success")}
+        ${listBlock("Nhận định chính", data.insights)}
+        ${listBlock("Cơ hội nổi bật", data.opportunities, "success")}
       </div>
 
       <div class="grid-2">
-        ${listBlock("Risks", data.risks, "danger")}
-        ${listBlock("Suggested Actions", data.suggestedActions)}
+        ${listBlock("Rủi ro cần lưu ý", data.risks, "danger")}
+        ${listBlock("Hành động đề xuất", data.suggestedActions)}
       </div>
     `,
     {
-      pageTitle: "Trang 3 · AI Insight",
+      pageTitle: "Trang 3 · Nhận định từ AI",
       pageNumber: 3,
       reportDate: data.reportDate,
       logoUrl: data.logoUrl,
@@ -851,7 +849,7 @@ function buildPages(data) {
 
   const page4 = createPageShell(
     `
-      <div class="section-title">Top Ranking</div>
+      <div class="section-title">Xếp hạng nổi bật</div>
 
       <div class="grid-2">
         ${rankingTable("Top nhân viên", data.topEmployees, "employee")}
@@ -859,7 +857,7 @@ function buildPages(data) {
       </div>
     `,
     {
-      pageTitle: "Trang 4 · Top Ranking",
+      pageTitle: "Trang 4 · Xếp hạng nổi bật",
       pageNumber: 4,
       reportDate: data.reportDate,
       logoUrl: data.logoUrl,
@@ -868,34 +866,34 @@ function buildPages(data) {
 
   const page5 = createPageShell(
     `
-      <div class="section-title">Action Plan</div>
+      <div class="section-title">Định hướng hành động</div>
 
       <div class="grid-2" style="margin-bottom:16px;">
         <div class="action-card">
-          <div class="action-title">Ưu tiên 1 · Củng cố độ phủ</div>
+          <div class="action-title">Ưu tiên 1 · Tăng cường mức độ hoạt động</div>
           <div class="action-body">
-            Tập trung rà soát nhân sự có số lượt viếng thăm thấp, tăng mật độ thăm khách hàng tại các địa bàn còn bỏ trống, và theo dõi sát số lượng khách hàng chưa khai thác.
+            Tập trung rà soát nhân sự có số lượt viếng thăm thấp, nâng mật độ tiếp cận khách hàng trên tệp đang phụ trách và cải thiện cường độ hoạt động thực địa.
           </div>
         </div>
 
         <div class="action-card">
           <div class="action-title">Ưu tiên 2 · Nâng chất lượng doanh số</div>
           <div class="action-body">
-            Đối chiếu doanh số chuyến đi và doanh số dự kiến để xác định điểm nghẽn chuyển đổi, đồng thời coaching nhóm có doanh số cao nhưng chất lượng pipeline chưa ổn định.
+            Đối chiếu doanh số chuyến đi và doanh số dự kiến để xác định điểm nghẽn chuyển đổi, đồng thời coaching nhóm có doanh số cao nhưng chất lượng chốt đơn chưa ổn định.
           </div>
         </div>
 
         <div class="action-card">
-          <div class="action-title">Ưu tiên 3 · Tối ưu thực thi thị trường</div>
+          <div class="action-title">Ưu tiên 3 · Tối ưu bao phủ thị trường</div>
           <div class="action-body">
-            Kiểm tra lại tính đều của hoạt động theo tỉnh/thành, tránh tập trung quá mạnh vào một vài địa bàn trong khi các khu vực khác chưa được chăm sóc đúng mức.
+            Kiểm tra lại mức độ phân bổ khách hàng phụ trách trên từng địa bàn, tránh tình trạng thị trường lớn nhưng tệp khách hàng đang quản lý còn mỏng.
           </div>
         </div>
 
         <div class="action-card">
           <div class="action-title">Ưu tiên 4 · Theo dõi điều hành hàng tuần</div>
           <div class="action-body">
-            Duy trì cơ chế CEO Brief mỗi tuần, so sánh xu hướng Health Score theo chu kỳ, và xác nhận các hành động sau họp đã được triển khai thực tế hay chưa.
+            Duy trì cơ chế tổng hợp điều hành mỗi tuần, so sánh xu hướng chỉ số sức khỏe điều hành AI theo chu kỳ và xác nhận các hành động sau họp đã được triển khai thực tế hay chưa.
           </div>
         </div>
       </div>
@@ -906,13 +904,13 @@ function buildPages(data) {
           ${escapeHtml(
             data.suggestedActions.length
               ? data.suggestedActions.join(" ")
-              : "Ban điều hành nên sử dụng đồng thời KPI, AI Insight và Top Ranking để ưu tiên hành động trong tuần kế tiếp."
+              : "Ban điều hành nên sử dụng đồng thời các chỉ số tổng quan, nhận định AI và xếp hạng nổi bật để ưu tiên hành động trong tuần kế tiếp."
           )}
         </div>
       </div>
     `,
     {
-      pageTitle: "Trang 5 · Action Plan",
+      pageTitle: "Trang 5 · Định hướng hành động",
       pageNumber: 5,
       reportDate: data.reportDate,
       logoUrl: data.logoUrl,
@@ -931,7 +929,7 @@ function buildDocumentHtml(data) {
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>VP-PHARM Executive Report</title>
+        <title>Báo cáo điều hành VP-PHARM</title>
         ${buildStyles()}
       </head>
       <body>

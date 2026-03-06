@@ -386,13 +386,13 @@ export default function Reports({
       <div className="card">
         <div className="card-header" style={{ textAlign: "center" }}>
           <h2 style={{ letterSpacing: 0.6, textTransform: "uppercase" }}>
-            LỊCH SỬ BÁO CÁO THỊ TRƯỜNG
+            BÁO CÁO ĐÃ LƯU
           </h2>
           <p>
             {isAdmin
-              ? "Admin: xem tất cả báo cáo gần nhất trong hệ thống"
+              ? "Quản trị: xem tất cả báo cáo gần nhất trong hệ thống"
               : isDirector
-              ? "Giám đốc: xem báo cáo do mình tạo và báo cáo của nhân viên thuộc team mình"
+              ? "Giám đốc kinh doanh: xem báo cáo do mình tạo và báo cáo của nhân viên thuộc đội phụ trách"
               : "Bạn không có quyền xem báo cáo"}
           </p>
         </div>
@@ -421,7 +421,13 @@ export default function Reports({
             />
             <StatCard
               title="Quyền đang dùng"
-              value={isAdmin ? "Admin" : isDirector ? "Director" : "User"}
+              value={
+                isAdmin
+                  ? "Quản trị"
+                  : isDirector
+                  ? "Giám đốc kinh doanh"
+                  : "Người dùng"
+              }
               sub="Phân quyền đọc báo cáo của hệ thống"
             />
           </div>
@@ -450,9 +456,9 @@ export default function Reports({
               items.map((it) => {
                 const active = it.id === selectedId;
                 const title = getReportTitle(it);
-                const created = formatTs(it.createdAt) || "unknown-time";
+                const created = formatTs(it.createdAt) || "Chưa rõ thời gian";
                 const preview =
-                  safeText(it.analysis_text).slice(0, 110) || "(Chưa có analysis_text)";
+                  safeText(it.analysis_text).slice(0, 110) || "(Chưa có nội dung phân tích)";
                 const periodText = formatReportPeriod(it);
 
                 return (
@@ -495,7 +501,7 @@ export default function Reports({
 
                     {isAdmin ? (
                       <div className="small" style={{ marginTop: 6 }}>
-                        Owner: <span className="kbd">{it.ownerEmail || ""}</span>
+                        Người tạo: <span className="kbd">{it.ownerEmail || ""}</span>
                       </div>
                     ) : null}
 
@@ -512,7 +518,7 @@ export default function Reports({
         <div className="card">
           <div className="card-header" style={{ textAlign: "center" }}>
             <h2 style={{ textTransform: "uppercase", letterSpacing: 0.6 }}>
-              CHI TIẾT BÁO CÁO & PHÂN TÍCH AI
+              CHI TIẾT BÁO CÁO VÀ PHÂN TÍCH AI
             </h2>
             <p>Thông tin chuyến đi, dữ liệu kinh doanh và kết quả phân tích</p>
           </div>
@@ -526,7 +532,7 @@ export default function Reports({
                   <StatCard
                     title="Tên báo cáo"
                     value={getReportTitle(selected)}
-                    sub={`Tạo lúc: ${formatTs(selected.createdAt) || "unknown"}`}
+                    sub={`Tạo lúc: ${formatTs(selected.createdAt) || "Chưa rõ thời gian"}`}
                   />
                   <StatCard
                     title="Doanh số dự kiến"
@@ -562,7 +568,7 @@ export default function Reports({
 
                   {isAdmin ? (
                     <div>
-                      <b>Owner:</b>{" "}
+                      <b>Người tạo:</b>{" "}
                       <span className="kbd">{selected.ownerEmail || ""}</span>{" "}
                       (<span className="kbd">{selected.ownerUid || ""}</span>)
                     </div>
@@ -590,7 +596,7 @@ export default function Reports({
 
                 <div className="grid two">
                   <InfoBox
-                    title="Tổng KH TDV phụ trách"
+                    title="Tổng khách hàng TDV phụ trách"
                     value={
                       selected.assignedCustomerCount ??
                       selected?.input?.assignedCustomerCount ??
@@ -598,23 +604,14 @@ export default function Reports({
                     }
                   />
                   <InfoBox
-                    title="KH chưa khai thác"
+                    title="Tổng khách hàng toàn địa bàn"
                     value={
-                      selected.unexploredCustomerCount ??
-                      selected?.input?.unexploredCustomerCount ??
+                      selected.totalMarketCustomerCount ??
+                      selected?.input?.totalMarketCustomerCount ??
                       0
                     }
                   />
                 </div>
-
-                <InfoBox
-                  title="Tổng KH toàn địa bàn"
-                  value={
-                    selected.totalMarketCustomerCount ??
-                    selected?.input?.totalMarketCustomerCount ??
-                    0
-                  }
-                />
 
                 <div className="grid two">
                   <div
@@ -675,7 +672,7 @@ export default function Reports({
                         >
                           <div style={{ fontWeight: 800 }}>{item.productName || "-"}</div>
                           <div className="small" style={{ marginTop: 6 }}>
-                            ĐVT: <span className="kbd">{item.unit || "-"}</span>
+                            Đơn vị tính: <span className="kbd">{item.unit || "-"}</span>
                           </div>
                           <div className="small" style={{ marginTop: 4 }}>
                             Giá bán: <span className="kbd">{formatVND(item.price || 0)}</span>
@@ -720,7 +717,9 @@ export default function Reports({
                     <h2 style={{ textTransform: "uppercase", letterSpacing: 0.6 }}>
                       KẾT QUẢ PHÂN TÍCH BÁO CÁO BẰNG AI
                     </h2>
-                    <p>Tổng hợp điều hành từ dữ liệu báo cáo tuần và file Excel</p>
+                    <p>
+                      Tổng hợp điều hành từ dữ liệu chuyến đi và file Excel
+                    </p>
                   </div>
 
                   <div className="card-body">
@@ -745,7 +744,7 @@ export default function Reports({
 
                         <div className="grid two">
                           <AnalysisSection
-                            title="Đánh giá độ phủ thị trường"
+                            title="Đánh giá thị trường"
                             data={
                               selectedAnalysisJson.coverageAssessment ||
                               selectedAnalysisJson.marketCoverage
@@ -811,14 +810,14 @@ export default function Reports({
                           lineHeight: 1.7,
                         }}
                       >
-                        {selected.analysis_text || "(Chưa có analysis_text)"}
+                        {selected.analysis_text || "(Chưa có nội dung phân tích)"}
                       </div>
                     )}
 
                     {selected.analysis_json ? (
                       <details style={{ marginTop: 14 }}>
                         <summary style={{ cursor: "pointer", fontWeight: 900 }}>
-                          Xem JSON cấu trúc
+                          Xem dữ liệu JSON cấu trúc
                         </summary>
                         <pre
                           style={{
@@ -840,7 +839,7 @@ export default function Reports({
 
                 <details>
                   <summary style={{ cursor: "pointer", fontWeight: 900 }}>
-                    Xem payload đã lưu
+                    Xem dữ liệu đầu vào đã lưu
                   </summary>
                   <pre
                     style={{

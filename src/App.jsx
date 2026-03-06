@@ -68,7 +68,7 @@ export default function App() {
   const canAccessAdmin = isAdmin;
 
   const roleLabel = useMemo(() => {
-    if (isAdmin) return "Admin";
+    if (isAdmin) return "Quản trị hệ thống";
     if (role === "director") return "Giám đốc kinh doanh";
     if (role === "user") return "Nhân viên";
     if (role === "pending") return "Chờ duyệt";
@@ -101,7 +101,7 @@ export default function App() {
     if (nextTab === "dashboard" && !canAccessDashboard) {
       showNotice(
         "Không có quyền truy cập",
-        "Chức năng Dashboard chỉ dành cho Admin hoặc Giám đốc kinh doanh.",
+        "Chức năng Tổng Quan chỉ dành cho Admin hoặc Giám đốc kinh doanh.",
         "warning"
       );
       return;
@@ -115,7 +115,7 @@ export default function App() {
     if (nextTab === "weekly" && !canAccessWeekly) {
       showNotice(
         "Không có quyền truy cập",
-        "Chức năng Weekly chỉ dành cho Admin hoặc Giám đốc kinh doanh.",
+        "Chức năng Tạo Báo Cáo chỉ dành cho Admin hoặc Giám đốc kinh doanh.",
         "warning"
       );
       return;
@@ -124,7 +124,7 @@ export default function App() {
     if (nextTab === "reports" && !canAccessReports) {
       showNotice(
         "Không có quyền truy cập",
-        "Chức năng Reports chỉ dành cho Admin hoặc Giám đốc kinh doanh.",
+        "Chức năng Báo Cáo Đã Lưu chỉ dành cho Admin hoặc Giám đốc kinh doanh.",
         "warning"
       );
       return;
@@ -318,7 +318,7 @@ export default function App() {
 
           <div className="row">
             <div className="pill">
-              <span className="small">User:</span>{" "}
+              <span className="small">Người dùng:</span>{" "}
               <span className="kbd">{userEmail}</span>
             </div>
 
@@ -341,7 +341,7 @@ export default function App() {
                           : "rgba(255,255,255,.15)",
                     }}
                   >
-                    Dashboard
+                    Tổng Quan
                   </button>
                 ) : null}
 
@@ -357,7 +357,7 @@ export default function App() {
                           : "rgba(255,255,255,.15)",
                     }}
                   >
-                    Weekly
+                    Tạo Báo Cáo
                   </button>
                 )}
 
@@ -373,7 +373,7 @@ export default function App() {
                           : "rgba(255,255,255,.15)",
                     }}
                   >
-                    Reports
+                    Báo Cáo Đã Lưu
                   </button>
                 ) : null}
 
@@ -389,7 +389,7 @@ export default function App() {
                           : "rgba(255,255,255,.15)",
                     }}
                   >
-                    Admin
+                    Quản Trị
                   </button>
                 ) : null}
 
