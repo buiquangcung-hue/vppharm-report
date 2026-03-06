@@ -1,309 +1,283 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { db, auth } from "../firebase.js";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+  limit,
+} from "firebase/firestore";
 
-function toPlainTextAnalysis(analysisJson, fallbackText) {
-  if (!analysisJson || typeof analysisJson !== "object") return fallbackText || "";
-
-  const lines = [];
-
-  const pushSection = (title, items) => {
-    if (!items) return;
-
-    lines.push(title);
-
-    if (Array.isArray(items)) {
-      for (const it of items) {
-        if (typeof it === "string") {
-          lines.push(`- ${it}`);
-        } else if (it && typeof it === "object") {
-          const t = it.title || it.name || it.staff || "Mục";
-          const r =
-            it.reason ||
-            it.rationale ||
-            it.focus ||
-            it.owner ||
-            it.suggested_action ||
-            "";
-          lines.push(`- ${t}${r ? `: ${r}` : ""}`);
-        }
-      }
-    } else if (typeof items === "string") {
-      lines.push(items);
-    } else {
-      lines.push(JSON.stringify(items));
-    }
-
-    lines.push("");
-  };
-
-  pushSection("Tóm tắt điều hành", analysisJson.executive_summary);
-  pushSection("Chẩn đoán / nguyên nhân", analysisJson.diagnosis?.drivers || analysisJson.diagnosis);
-  pushSection("Cảnh báo", analysisJson.alerts);
-  pushSection("Cơ hội", analysisJson.opportunities);
-  pushSection("Coaching plan", analysisJson.coaching_plan);
-  pushSection("Action plan tuần tới", analysisJson.action_plan);
-
-  if (analysisJson.questions_to_clarify?.length) {
-    pushSection("Câu hỏi cần làm rõ", analysisJson.questions_to_clarify);
+function formatTs(ts) {
+  try {
+    const d = ts?.toDate ? ts.toDate() : null;
+    if (!d) return "";
+    return d.toLocaleString("vi-VN");
+  } catch {
+    return "";
   }
-
-  return lines.join("\n").trim();
 }
 
-function getWeekKeyHint() {
-  const d = new Date();
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
-  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+function safeText(x) {
+  return (x || "").toString().replace(/\s+/g, " ").trim();
 }
 
-export default function Weekly() {
-  const [form, setForm] = useState({
-    weekKey: getWeekKeyHint(),
-    results: "",
-    people: "",
-    risks: "",
-    nextWeekPlan: "",
-  });
-
-  const [loading, setLoading] = useState(false);
-  const [analysisText, setAnalysisText] = useState("");
-  const [analysisJson, setAnalysisJson] = useState(null);
-  const [savedId, setSavedId] = useState("");
+export default function Reports({ isAdmin = false }) {
+  const [allItems, setAllItems] = useState([]);
+  const [selectedId, setSelectedId] = useState("");
   const [error, setError] = useState("");
 
-  const reportPayload = useMemo(() => {
-    return {
-      weekKey: (form.weekKey || "").trim(),
-      results: (form.results || "").trim(),
-      people: (form.people || "").trim(),
-      risks: (form.risks || "").trim(),
-      nextWeekPlan: (form.nextWeekPlan || "").trim(),
-    };
-  }, [form]);
+  useEffect(() => {
+    setError("");
 
-  function updateField(key, value) {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  }
+    const base = collection(db, "weekly_reports");
+    const qy = query(base, orderBy("createdAt", "desc"), limit(50));
 
-  async function submitReport() {
-    try {
-      setLoading(true);
-      setSavedId("");
-      setError("");
-      setAnalysisText("");
-      setAnalysisJson(null);
-
-      if (!auth.currentUser) {
-        throw new Error("Bạn chưa đăng nhập.");
+    const unsub = onSnapshot(
+      qy,
+      (snap) => {
+        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setAllItems(rows);
+      },
+      (err) => {
+        console.error("Reports snapshot error:", err);
+        setAllItems([]);
+        setSelectedId("");
+        setError("Không thể tải dữ liệu báo cáo. Vui lòng thử lại sau.");
       }
+    );
 
-      if (!reportPayload.weekKey) {
-        throw new Error("Vui lòng nhập tuần báo cáo.");
-      }
+    return () => unsub();
+  }, []);
 
-      // 1) Gọi AI API
-      const res = await fetch("/api/analyzeWeeklyReport", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          report: reportPayload,
-        }),
-      });
+  const currentUid = auth.currentUser?.uid || "";
 
-      const data = await res.json();
+  const items = useMemo(() => {
+    const rows = isAdmin
+      ? allItems
+      : allItems.filter((it) => (it.ownerUid || "") === currentUid);
 
-      if (!res.ok) {
-        throw new Error(data?.error || "API error");
-      }
+    return rows.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
+  }, [allItems, isAdmin, currentUid]);
 
-      const aJson = data.analysis_json || null;
-      const aText = data.analysis_text || data.analysis || "";
-
-      setAnalysisJson(aJson);
-
-      const prettyText = toPlainTextAnalysis(aJson, aText);
-      setAnalysisText(prettyText);
-
-      // 2) Lưu vào Firestore
-      const user = auth.currentUser;
-
-      const docRef = await addDoc(collection(db, "weekly_reports"), {
-        weekKey: reportPayload.weekKey || null,
-        ownerUid: user?.uid || null,
-        ownerEmail: user?.email || null,
-        input: reportPayload,
-        analysis_text: prettyText,
-        analysis_json: aJson,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      setSavedId(docRef.id);
-    } catch (e) {
-      const msg = String(e?.message || e);
-      setError(msg);
-      setAnalysisText(`Lỗi: ${msg}`);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (!items.length) {
+      setSelectedId("");
+      return;
     }
-  }
+
+    if (!selectedId || !items.some((r) => r.id === selectedId)) {
+      setSelectedId(items[0].id);
+    }
+  }, [items, selectedId]);
+
+  const selected = useMemo(
+    () => items.find((x) => x.id === selectedId) || null,
+    [items, selectedId]
+  );
 
   return (
     <div className="grid" style={{ gap: 14 }}>
       <div className="card">
         <div className="card-header">
-          <h2>AI Weekly Sales Intelligence</h2>
-          <p>VP-PHARM · Báo cáo tuần → AI phân tích → Lưu lịch sử</p>
+          <h2>Lịch sử báo cáo</h2>
+          <p>
+            {isAdmin
+              ? "Admin: xem tất cả báo cáo (50 bản ghi gần nhất)"
+              : "Chỉ báo cáo của bạn (50 bản ghi gần nhất)"}
+          </p>
         </div>
-
         <div className="card-body">
-          <div className="grid two">
-            <div>
-              <label>Tuần báo cáo (weekKey)</label>
-              <input
-                value={form.weekKey}
-                onChange={(e) => updateField("weekKey", e.target.value)}
-                placeholder="Ví dụ: 2026-W10"
-              />
-              <div className="small" style={{ marginTop: 8 }}>
-                Gợi ý: <span className="kbd">{getWeekKeyHint()}</span>
-              </div>
-            </div>
-
-            <div>
-              <label>Trạng thái lưu</label>
-              <div className="pill" style={{ marginTop: 2 }}>
-                {savedId ? (
-                  <>
-                    <span className="small">Đã lưu:</span>
-                    <span className="kbd">{savedId}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="small">Chưa lưu</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="hr"></div>
-
-          <label>Kết quả tuần</label>
-          <textarea
-            rows={5}
-            value={form.results}
-            onChange={(e) => updateField("results", e.target.value)}
-            placeholder={`- Doanh thu: ...
-- Độ phủ / điểm bán active: ...
-- Khách hàng mới / rời bỏ: ...
-- Top SKU tăng / giảm: ...`}
-          />
-
-          <label>Con người (nhân sự / coaching)</label>
-          <textarea
-            rows={5}
-            value={form.people}
-            onChange={(e) => updateField("people", e.target.value)}
-            placeholder={`- NV vượt KPI: A, B (lý do)
-- NV dưới KPI: C (nguyên nhân)
-- Nhu cầu hỗ trợ / training / chính sách: ...`}
-          />
-
-          <label>Vận hành & rủi ro</label>
-          <textarea
-            rows={5}
-            value={form.risks}
-            onChange={(e) => updateField("risks", e.target.value)}
-            placeholder={`- Tồn kho bất thường: ...
-- Công nợ / COD / giao hàng: ...
-- Khiếu nại khách: ...
-- Đối thủ / biến động thị trường: ...`}
-          />
-
-          <label>Kế hoạch tuần tới</label>
-          <textarea
-            rows={5}
-            value={form.nextWeekPlan}
-            onChange={(e) => updateField("nextWeekPlan", e.target.value)}
-            placeholder={`- Mục tiêu doanh thu: ...
-- Mở điểm bán: ...
-- SKU trọng tâm: ...
-- Kế hoạch coaching: ...
-- CTKM / đề xuất hỗ trợ: ...`}
-          />
-
-          <div style={{ height: 14 }} />
-
-          <div className="row">
-            <button className="btn" onClick={submitReport} disabled={loading}>
-              {loading ? "AI đang phân tích..." : "Phân tích & Lưu báo cáo"}
-            </button>
-
-            <span className="small">
-              AI sẽ trả JSON cấu trúc và lưu báo cáo vào Firestore.
-            </span>
-          </div>
-
           {error ? (
-            <div style={{ marginTop: 12 }} className="small">
-              Lỗi: {error}
+            <div className="small">
+              {error}
             </div>
           ) : null}
+
+          <div className="row" style={{ marginTop: 8 }}>
+            <span className="pill">
+              <span className="small">Tổng</span>{" "}
+              <span className="kbd">{items.length}</span>
+            </span>
+            <span className="pill">
+              <span className="small">Quyền</span>{" "}
+              <span className="kbd">{isAdmin ? "admin" : "user"}</span>
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <h2>Kết quả phân tích AI</h2>
-          <p>Executive summary, cảnh báo, cơ hội, coaching và action plan</p>
+      <div
+        className="grid"
+        style={{
+          gridTemplateColumns: "360px 1fr",
+          gap: 14,
+        }}
+      >
+        <div className="card">
+          <div className="card-header">
+            <h2>Danh sách</h2>
+            <p>Click để xem chi tiết</p>
+          </div>
+          <div
+            className="card-body"
+            style={{ maxHeight: "70vh", overflow: "auto", display: "grid", gap: 10 }}
+          >
+            {items.length === 0 ? (
+              <div className="small">Chưa có báo cáo nào.</div>
+            ) : (
+              items.map((it) => {
+                const active = it.id === selectedId;
+                const weekKey = it.weekKey || it?.input?.weekKey || "unknown-week";
+                const created = formatTs(it.createdAt) || "unknown-time";
+                const preview =
+                  safeText(it.analysis_text).slice(0, 90) || "(Chưa có analysis_text)";
+
+                return (
+                  <button
+                    key={it.id}
+                    className="btn secondary"
+                    onClick={() => setSelectedId(it.id)}
+                    style={{
+                      textAlign: "left",
+                      width: "100%",
+                      borderColor: active
+                        ? "rgba(20,184,166,.55)"
+                        : "rgba(255,255,255,.14)",
+                      background: active
+                        ? "rgba(255,255,255,.14)"
+                        : "rgba(255,255,255,.10)",
+                    }}
+                    title={it.id}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ fontWeight: 900 }}>{weekKey}</div>
+                      <div className="small">{created}</div>
+                    </div>
+
+                    {isAdmin ? (
+                      <div className="small" style={{ marginTop: 6 }}>
+                        Owner: <span className="kbd">{it.ownerEmail || ""}</span>
+                      </div>
+                    ) : null}
+
+                    <div className="small" style={{ marginTop: 6, lineHeight: 1.35 }}>
+                      {preview}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
         </div>
 
-        <div className="card-body">
-          <div
-            style={{
-              whiteSpace: "pre-wrap",
-              background: "rgba(255,255,255,.06)",
-              padding: 14,
-              borderRadius: 14,
-              border: "1px solid rgba(255,255,255,.10)",
-              minHeight: 160,
-            }}
-          >
-            {analysisText || "Chưa có kết quả. Hãy nhập báo cáo và bấm “Phân tích & Lưu báo cáo”."}
+        <div className="card">
+          <div className="card-header">
+            <h2>Chi tiết</h2>
+            <p>Input + kết quả AI</p>
           </div>
+          <div className="card-body" style={{ display: "grid", gap: 12 }}>
+            {!selected ? (
+              <div className="small">Chọn 1 báo cáo ở danh sách bên trái.</div>
+            ) : (
+              <>
+                <div className="small">
+                  <div>
+                    <b>ID:</b> <span className="kbd">{selected.id}</span>
+                  </div>
+                  <div>
+                    <b>Tuần:</b>{" "}
+                    <span className="kbd">
+                      {selected.weekKey || selected?.input?.weekKey || "unknown"}
+                    </span>
+                  </div>
+                  <div>
+                    <b>Tạo lúc:</b>{" "}
+                    <span className="kbd">
+                      {formatTs(selected.createdAt) || "unknown"}
+                    </span>
+                  </div>
 
-          {analysisJson ? (
-            <details style={{ marginTop: 12 }}>
-              <summary style={{ cursor: "pointer", fontWeight: 700 }}>
-                Xem JSON cấu trúc
-              </summary>
-              <pre
-                style={{
-                  overflow: "auto",
-                  background: "rgba(0,0,0,.25)",
-                  color: "#d6e2ff",
-                  padding: 12,
-                  borderRadius: 12,
-                  marginTop: 10,
-                }}
-              >
-                {JSON.stringify(analysisJson, null, 2)}
-              </pre>
-            </details>
-          ) : null}
+                  {isAdmin ? (
+                    <div>
+                      <b>Owner:</b>{" "}
+                      <span className="kbd">{selected.ownerEmail || ""}</span>{" "}
+                      (<span className="kbd">{selected.ownerUid || ""}</span>)
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="hr" />
+
+                <div>
+                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                    Báo cáo gốc (Input)
+                  </div>
+                  <pre
+                    style={{
+                      margin: 0,
+                      padding: 12,
+                      background: "rgba(255,255,255,.06)",
+                      borderRadius: 14,
+                      overflow: "auto",
+                      border: "1px solid rgba(255,255,255,.10)",
+                    }}
+                  >
+{JSON.stringify(selected.input || {}, null, 2)}
+                  </pre>
+                </div>
+
+                <div>
+                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                    Kết quả AI (Text)
+                  </div>
+                  <div
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      padding: 12,
+                      background: "rgba(255,255,255,.06)",
+                      borderRadius: 14,
+                      border: "1px solid rgba(255,255,255,.10)",
+                      minHeight: 160,
+                    }}
+                  >
+                    {selected.analysis_text || "(Chưa có analysis_text)"}
+                  </div>
+                </div>
+
+                {selected.analysis_json ? (
+                  <details>
+                    <summary style={{ cursor: "pointer", fontWeight: 900 }}>
+                      Xem JSON cấu trúc
+                    </summary>
+                    <pre
+                      style={{
+                        marginTop: 10,
+                        padding: 12,
+                        background: "rgba(0,0,0,.25)",
+                        borderRadius: 14,
+                        overflow: "auto",
+                        border: "1px solid rgba(255,255,255,.10)",
+                        color: "#d6e2ff",
+                      }}
+                    >
+{JSON.stringify(selected.analysis_json, null, 2)}
+                    </pre>
+                  </details>
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (typeof value?.seconds === "number") return value.seconds * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
