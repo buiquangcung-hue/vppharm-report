@@ -23,6 +23,14 @@ function safeText(x) {
   return (x || "").toString().replace(/\s+/g, " ").trim();
 }
 
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (typeof value?.seconds === "number") return value.seconds * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 export default function Reports({ isAdmin = false }) {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState("");
@@ -31,30 +39,35 @@ export default function Reports({ isAdmin = false }) {
   useEffect(() => {
     setError("");
 
-    const uid = auth.currentUser?.uid || "__none__";
+    const uid = auth.currentUser?.uid || "";
     const base = collection(db, "weekly_reports");
 
     const qy = isAdmin
       ? query(base, orderBy("createdAt", "desc"), limit(50))
-      : query(
-          base,
-          where("ownerUid", "==", uid),
-          orderBy("createdAt", "desc"),
-          limit(50)
-        );
+      : query(base, where("ownerUid", "==", uid), limit(50));
 
     const unsub = onSnapshot(
       qy,
       (snap) => {
-        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const rows = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
+
         setItems(rows);
+
         if ((!selectedId || !rows.some((r) => r.id === selectedId)) && rows.length) {
           setSelectedId(rows[0].id);
+        }
+
+        if (!rows.length) {
+          setSelectedId("");
         }
       },
       (err) => {
         console.error("Reports snapshot error:", err);
-        setError(err?.message || "Không thể tải dữ liệu báo cáo.");
+        setItems([]);
+        setSelectedId("");
+        setError("Không thể tải dữ liệu báo cáo. Vui lòng thử lại sau.");
       }
     );
 
@@ -81,7 +94,7 @@ export default function Reports({ isAdmin = false }) {
         <div className="card-body">
           {error ? (
             <div className="small">
-              Không thể tải dữ liệu báo cáo. Vui lòng thử lại sau.
+              {error}
             </div>
           ) : null}
 
