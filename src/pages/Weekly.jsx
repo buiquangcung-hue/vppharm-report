@@ -924,19 +924,38 @@ export default function Weekly({
 
             <div style={{ height: 14 }} />
 
-            <div className="row">
-              <button className="btn" type="submit" disabled={loading}>
-                {loading ? "AI đang phân tích..." : "PHÂN TÍCH BÁO CÁO VÀ LƯU TRỮ"}
-              </button>
-            </div>
+            <div
+  className="row"
+  style={{
+    justifyContent: "center",
+    marginTop: 10
+  }}
+>
+  <button
+    className="btn"
+    type="submit"
+    disabled={loading}
+    style={{
+      padding: "12px 24px",
+      fontSize: 15
+    }}
+  >
+    {loading ? "AI đang phân tích..." : "PHÂN TÍCH BÁO CÁO VÀ LƯU TRỮ"}
+  </button>
+</div>
           </form>
         </div>
       </div>
 
       <div className="card">
-        <div className="card-header">
-          <h2>Kết quả phân tích AI</h2>
-        </div>
+        <div
+  className="card-header"
+  style={{
+    textAlign: "center"
+  }}
+>
+  <h2>KẾT QUẢ PHÂN TÍCH BÁO CÁO BẰNG AI</h2>
+</div>
 
         <div className="card-body">
           <div
