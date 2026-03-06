@@ -11,7 +11,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDxkm22xRpjMckegNdEvVs0-jHJ2UraVXM",
   authDomain: "enthusiasts-golf-club-6868.firebaseapp.com",
   projectId: "enthusiasts-golf-club-6868",
-  storageBucket: "enthusiasts-golf-club-6868.appspot.com",
+  storageBucket: "enthusiasts-golf-club-6868-u5292",
   messagingSenderId: "698818839991",
   appId: "1:698818839991:web:88181ce4eae924ee4c1432",
 };
