@@ -5,51 +5,50 @@ import {
   onSnapshot,
   orderBy,
   query,
-  where,
   doc,
   setDoc,
   serverTimestamp,
 } from "firebase/firestore";
 
 export default function Admin({ adminEmail, onNotify }) {
-  const [pending, setPending] = useState([]);
-  const [approved, setApproved] = useState([]);
-  const [blocked, setBlocked] = useState([]);
+  const [users, setUsers] = useState([]);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     setErr("");
     const col = collection(db, "users");
 
-    const unsubPending = onSnapshot(
-      query(
-        col,
-        where("approved", "==", false),
-        where("blocked", "==", false),
-        orderBy("createdAt", "desc")
-      ),
-      (snap) => setPending(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-      (e) => setErr(String(e?.message || e))
-    );
-
-    const unsubApproved = onSnapshot(
-      query(col, where("approved", "==", true), orderBy("approvedAt", "desc")),
-      (snap) => setApproved(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-      (e) => setErr(String(e?.message || e))
-    );
-
-    const unsubBlocked = onSnapshot(
-      query(col, where("blocked", "==", true), orderBy("blockedAt", "desc")),
-      (snap) => setBlocked(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    const unsubUsers = onSnapshot(
+      query(col, orderBy("createdAt", "desc")),
+      (snap) => {
+        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setUsers(rows);
+      },
       (e) => setErr(String(e?.message || e))
     );
 
     return () => {
-      unsubPending();
-      unsubApproved();
-      unsubBlocked();
+      unsubUsers();
     };
   }, []);
+
+  const pending = useMemo(() => {
+    return users
+      .filter((u) => u.approved === false && u.blocked === false)
+      .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
+  }, [users]);
+
+  const approved = useMemo(() => {
+    return users
+      .filter((u) => u.approved === true && u.blocked !== true)
+      .sort((a, b) => toMillis(b.approvedAt) - toMillis(a.approvedAt));
+  }, [users]);
+
+  const blocked = useMemo(() => {
+    return users
+      .filter((u) => u.blocked === true)
+      .sort((a, b) => toMillis(b.blockedAt) - toMillis(a.blockedAt));
+  }, [users]);
 
   const counts = useMemo(
     () => ({
@@ -70,6 +69,7 @@ export default function Admin({ adminEmail, onNotify }) {
           status: "active",
           role: u.email === adminEmail ? "admin" : "user",
           approvedAt: serverTimestamp(),
+          blockedAt: null,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
@@ -129,6 +129,8 @@ export default function Admin({ adminEmail, onNotify }) {
           blocked: false,
           status: "pending",
           role: "pending",
+          blockedAt: null,
+          approvedAt: null,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
@@ -323,4 +325,12 @@ export default function Admin({ adminEmail, onNotify }) {
       </div>
     </div>
   );
+}
+
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (typeof value?.seconds === "number") return value.seconds * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
