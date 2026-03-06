@@ -113,31 +113,31 @@ function toPlainTextAnalysis(analysisJson, fallbackText) {
   };
 
   pushSection(
-    "Tóm tắt chuyến đi",
+    "TÓM TẮT CHUYẾN ĐI",
     analysisJson.tripSummary || analysisJson.executive_summary
   );
   pushSection(
-    "Đánh giá nhân viên",
+    "ĐÁNH GIÁ NHÂN VIÊN",
     analysisJson.employeeAssessment || analysisJson.employeePerformance
   );
   pushSection(
-    "Đánh giá độ phủ thị trường",
+    "ĐÁNH GIÁ ĐỘ PHỦ THỊ TRƯỜNG",
     analysisJson.coverageAssessment || analysisJson.marketCoverage
   );
   pushSection(
-    "Đánh giá doanh số",
+    "ĐÁNH GIÁ DOANH SỐ",
     analysisJson.salesAssessment || analysisJson.salesPotential
   );
-  pushSection("Điểm mạnh nổi bật", analysisJson.strengthHighlights);
-  pushSection("Điểm yếu cần cải thiện", analysisJson.weaknessHighlights);
-  pushSection("Rủi ro", analysisJson.risks);
-  pushSection("Cơ hội", analysisJson.opportunities);
+  pushSection("ĐIỂM MẠNH NỔI BẬT", analysisJson.strengthHighlights);
+  pushSection("ĐIỂM YẾU CẦN CẢI THIỆN", analysisJson.weaknessHighlights);
+  pushSection("RỦI RO", analysisJson.risks);
+  pushSection("CƠ HỘI", analysisJson.opportunities);
   pushSection(
-    "Khuyến nghị quản lý",
+    "KHUYẾN NGHỊ QUẢN LÝ",
     analysisJson.managerRecommendations || analysisJson.managerRecommendation
   );
   pushSection(
-    "Kế hoạch tuần tới",
+    "KẾ HOẠCH TUẦN TỚI",
     analysisJson.nextWeekActions || analysisJson.action_plan
   );
 
@@ -167,10 +167,53 @@ function RequiredMark() {
 
 function FieldLabel({ children, required = false }) {
   return (
-    <label>
+    <label style={{ fontWeight: 700, letterSpacing: 0.2 }}>
       {children}
       {required ? <RequiredMark /> : null}
     </label>
+  );
+}
+
+function SectionTitle({ title, subtitle }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div
+        style={{
+          fontWeight: 900,
+          fontSize: 16,
+          letterSpacing: 0.4,
+          textTransform: "uppercase",
+        }}
+      >
+        {title}
+      </div>
+      {subtitle ? (
+        <div className="small" style={{ marginTop: 4 }}>
+          {subtitle}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function StatCard({ title, value, sub }) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: "rgba(255,255,255,.06)",
+        borderRadius: 16,
+        border: "1px solid rgba(255,255,255,.10)",
+      }}
+    >
+      <div className="small">{title}</div>
+      <div style={{ fontWeight: 900, fontSize: 18, marginTop: 8 }}>{value}</div>
+      {sub ? (
+        <div className="small" style={{ marginTop: 6 }}>
+          {sub}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -622,358 +665,498 @@ export default function Weekly({
   }
 
   return (
-    <div className="grid" style={{ gap: 14 }}>
+    <div className="grid" style={{ gap: 16 }}>
       <div className="card">
-        <div className="card-header">
-          <h2>Báo cáo đi thị trường tuần</h2>
-          <p>Nhập dữ liệu chuyến đi, AI phân tích và lưu trữ báo cáo.</p>
+        <div className="card-header" style={{ textAlign: "center" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 12px",
+              borderRadius: 999,
+              border: "1px solid rgba(255,255,255,.14)",
+              background: "rgba(255,255,255,.06)",
+              fontSize: 12,
+              marginBottom: 12,
+            }}
+          >
+            <span>VP-PHARM</span>
+            <span style={{ opacity: 0.6 }}>•</span>
+            <span>{isAdmin ? "ADMIN" : "DIRECTOR"}</span>
+          </div>
+
+          <h2
+            style={{
+              fontSize: 24,
+              marginBottom: 6,
+              letterSpacing: 0.4,
+            }}
+          >
+            BÁO CÁO ĐI THỊ TRƯỜNG TUẦN
+          </h2>
+          <p>Nhập dữ liệu chuyến đi, AI phân tích và lưu trữ báo cáo điều hành.</p>
         </div>
 
         <div className="card-body">
           {error ? (
-            <div className="small" style={{ marginBottom: 12 }}>
-              Lỗi: {error}
+            <div
+              style={{
+                marginBottom: 14,
+                padding: 12,
+                borderRadius: 14,
+                border: "1px solid rgba(239,68,68,.35)",
+                background: "rgba(239,68,68,.10)",
+              }}
+            >
+              <div className="small" style={{ color: "#ffd5d5" }}>
+                Lỗi: {error}
+              </div>
             </div>
           ) : null}
 
-          <form onSubmit={submitReport} style={{ display: "grid", gap: 0 }}>
-            <div className="grid two">
-              <div>
-                <FieldLabel required>Từ ngày</FieldLabel>
-                <input
-                  type="date"
-                  required
-                  value={form.weekFrom}
-                  onChange={(e) => updateField("weekFrom", e.target.value)}
-                />
-              </div>
+          <div className="grid two" style={{ marginBottom: 16 }}>
+            <StatCard
+              title="Nhân viên khả dụng"
+              value={employees.length}
+              sub={isAdmin ? "Admin thấy toàn bộ nhân viên active" : "Giám đốc chỉ thấy nhân viên thuộc team mình"}
+            />
+            <StatCard
+              title="Sản phẩm đang hoạt động"
+              value={products.length}
+              sub="Danh mục dùng cho báo cáo tuần"
+            />
+          </div>
 
-              <div>
-                <FieldLabel required>Đến ngày</FieldLabel>
-                <input
-                  type="date"
-                  required
-                  value={form.weekTo}
-                  onChange={(e) => updateField("weekTo", e.target.value)}
+          <form onSubmit={submitReport} style={{ display: "grid", gap: 16 }}>
+            <div className="card" style={{ boxShadow: "none" }}>
+              <div className="card-body">
+                <SectionTitle
+                  title="Thông tin chuyến đi"
+                  subtitle="Thiết lập tuần làm việc, nhân viên đi cùng và địa bàn phụ trách."
                 />
-              </div>
-            </div>
 
-            <div className="grid two" style={{ marginTop: 12 }}>
-              <div>
-                <FieldLabel required>Đi với nhân viên</FieldLabel>
-                <select
-                  required
-                  value={form.employeeUid}
-                  onChange={(e) => handleEmployeeChange(e.target.value)}
-                >
-                  <option value="">-- Chọn nhân viên --</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.code ? `${emp.code} - ${emp.name}` : emp.name || emp.id}
-                    </option>
-                  ))}
-                </select>
-                {!isAdmin && isDirector && employees.length === 0 ? (
-                  <div className="small" style={{ marginTop: 6 }}>
-                    Hiện chưa có nhân viên nào được gán cho tài khoản giám đốc này.
+                <div className="grid two">
+                  <div>
+                    <FieldLabel required>Từ ngày</FieldLabel>
+                    <input
+                      type="date"
+                      required
+                      value={form.weekFrom}
+                      onChange={(e) => updateField("weekFrom", e.target.value)}
+                    />
                   </div>
-                ) : null}
-              </div>
 
-              <div>
-                <FieldLabel required>Đi địa bàn nào</FieldLabel>
-                <select
-                  required
-                  value={form.province}
-                  onChange={(e) => updateField("province", e.target.value)}
-                >
-                  <option value="">-- Chọn tỉnh / thành --</option>
-                  {provinces.map((p) => (
-                    <option key={p.id} value={p.name}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                  <div>
+                    <FieldLabel required>Đến ngày</FieldLabel>
+                    <input
+                      type="date"
+                      required
+                      value={form.weekTo}
+                      onChange={(e) => updateField("weekTo", e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid two" style={{ marginTop: 12 }}>
+                  <div>
+                    <FieldLabel required>Đi với nhân viên</FieldLabel>
+                    <select
+                      required
+                      value={form.employeeUid}
+                      onChange={(e) => handleEmployeeChange(e.target.value)}
+                    >
+                      <option value="">-- Chọn nhân viên --</option>
+                      {employees.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.code ? `${emp.code} - ${emp.name}` : emp.name || emp.id}
+                        </option>
+                      ))}
+                    </select>
+                    {!isAdmin && isDirector && employees.length === 0 ? (
+                      <div className="small" style={{ marginTop: 6 }}>
+                        Hiện chưa có nhân viên nào được gán cho tài khoản giám đốc này.
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <FieldLabel required>Đi địa bàn nào</FieldLabel>
+                    <select
+                      required
+                      value={form.province}
+                      onChange={(e) => updateField("province", e.target.value)}
+                    >
+                      <option value="">-- Chọn tỉnh / thành --</option>
+                      {provinces.map((p) => (
+                        <option key={p.id} value={p.name}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid two" style={{ marginTop: 12 }}>
+                  <div>
+                    <FieldLabel>Tên báo cáo</FieldLabel>
+                    <input value={reportDisplayName || ""} disabled />
+                  </div>
+
+                  <div>
+                    <FieldLabel>Trạng thái lưu</FieldLabel>
+                    <div className="pill" style={{ marginTop: 2 }}>
+                      {savedId ? (
+                        <>
+                          <span className="small">Đã lưu:</span>
+                          <span className="kbd">{savedId}</span>
+                        </>
+                      ) : (
+                        <span className="small">Chưa lưu</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="grid two" style={{ marginTop: 12 }}>
-              <div>
-                <FieldLabel>Tên báo cáo</FieldLabel>
-                <input value={reportDisplayName || ""} disabled />
-              </div>
+            <div className="card" style={{ boxShadow: "none" }}>
+              <div className="card-body">
+                <SectionTitle
+                  title="Hiệu quả chuyến đi"
+                  subtitle="Ghi nhận độ phủ khách hàng, doanh số và quy mô thị trường."
+                />
 
-              <div>
-                <FieldLabel>Trạng thái lưu</FieldLabel>
-                <div className="pill" style={{ marginTop: 2 }}>
-                  {savedId ? (
-                    <>
-                      <span className="small">Đã lưu:</span>
-                      <span className="kbd">{savedId}</span>
-                    </>
+                <div className="grid two">
+                  <div>
+                    <FieldLabel required>Số khách hàng đến viếng thăm</FieldLabel>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={form.visitCustomerCount}
+                      onChange={(e) => updateField("visitCustomerCount", e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel required>Doanh số của cả chuyến đi cùng TDV (VND)</FieldLabel>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={form.tripRevenue}
+                      onChange={(e) => updateField("tripRevenue", e.target.value)}
+                    />
+                    <div className="small" style={{ marginTop: 6 }}>
+                      {formatVND(form.tripRevenue || 0)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid two" style={{ marginTop: 12 }}>
+                  <div>
+                    <FieldLabel required>Tổng số khách hàng TDV phụ trách</FieldLabel>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={form.assignedCustomerCount}
+                      onChange={(e) =>
+                        updateField("assignedCustomerCount", e.target.value)
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel required>Số khách hàng chưa khai thác</FieldLabel>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={form.unexploredCustomerCount}
+                      onChange={(e) =>
+                        updateField("unexploredCustomerCount", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 12 }}>
+                  <FieldLabel required>Tổng số khách hàng trên toàn địa bàn</FieldLabel>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={form.totalMarketCustomerCount}
+                    onChange={(e) =>
+                      updateField("totalMarketCustomerCount", e.target.value)
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="card" style={{ boxShadow: "none" }}>
+              <div className="card-body">
+                <SectionTitle
+                  title="Đánh giá nhân viên"
+                  subtitle="Nhập nhận xét thực tế để AI đưa ra đánh giá sâu hơn."
+                />
+
+                <FieldLabel required>Điểm mạnh của nhân viên trong chuyến đi</FieldLabel>
+                <textarea
+                  required
+                  rows={5}
+                  value={form.employeeStrengths}
+                  onChange={(e) => updateField("employeeStrengths", e.target.value)}
+                  placeholder="Ví dụ: chủ động mở rộng điểm bán, giao tiếp khách hàng tốt, nắm sản phẩm tốt..."
+                />
+
+                <FieldLabel required>Điểm yếu của nhân viên trong chuyến đi</FieldLabel>
+                <textarea
+                  required
+                  rows={5}
+                  value={form.employeeWeaknesses}
+                  onChange={(e) => updateField("employeeWeaknesses", e.target.value)}
+                  placeholder="Ví dụ: theo dõi sau bán chưa sát, chưa chốt được nhóm khách hàng mới..."
+                />
+              </div>
+            </div>
+
+            <div className="card" style={{ boxShadow: "none" }}>
+              <div className="card-body">
+                <SectionTitle
+                  title="Cơ cấu doanh số mặt hàng"
+                  subtitle="Thêm các sản phẩm trọng tâm và nhập số lượng để tính doanh số dự kiến."
+                />
+
+                <div className="grid two">
+                  <div>
+                    <FieldLabel>Chọn mặt hàng</FieldLabel>
+                    <select
+                      value={selectedProductId}
+                      onChange={(e) => setSelectedProductId(e.target.value)}
+                    >
+                      <option value="">-- Chọn mặt hàng --</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} · {p.unit} · {formatVND(p.price || 0)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "end" }}>
+                    <button
+                      className="btn secondary"
+                      type="button"
+                      onClick={addSelectedProduct}
+                      style={{ minWidth: 180 }}
+                    >
+                      Thêm mặt hàng
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+                  {form.productLines.length === 0 ? (
+                    <div
+                      style={{
+                        padding: 16,
+                        borderRadius: 14,
+                        border: "1px dashed rgba(255,255,255,.16)",
+                        background: "rgba(255,255,255,.03)",
+                      }}
+                    >
+                      <div className="small">Chưa có mặt hàng nào được thêm.</div>
+                    </div>
                   ) : (
-                    <span className="small">Chưa lưu</span>
-                  )}
-                </div>
-              </div>
-            </div>
+                    form.productLines.map((item, index) => (
+                      <div
+                        key={item.productId}
+                        className="card"
+                        style={{
+                          boxShadow: "none",
+                          background: "rgba(255,255,255,.05)",
+                        }}
+                      >
+                        <div className="card-body">
+                          <div className="grid two" style={{ gap: 12 }}>
+                            <div>
+                              <div style={{ fontWeight: 900, fontSize: 16 }}>
+                                {item.productName}
+                              </div>
+                              <div className="small" style={{ marginTop: 6 }}>
+                                Đơn vị tính: <span className="kbd">{item.unit}</span>
+                              </div>
+                              <div className="small" style={{ marginTop: 4 }}>
+                                Giá bán: <span className="kbd">{formatVND(item.price)}</span>
+                              </div>
+                            </div>
 
-            <div className="hr" />
+                            <div style={{ display: "grid", gap: 8 }}>
+                              <div>
+                                <FieldLabel required>Số lượng</FieldLabel>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  required
+                                  value={item.quantity}
+                                  onChange={(e) =>
+                                    updateProductLineQuantity(index, e.target.value)
+                                  }
+                                />
+                              </div>
 
-            <div className="grid two">
-              <div>
-                <FieldLabel required>Số khách hàng đến viếng thăm</FieldLabel>
-                <input
-                  type="number"
-                  min="0"
-                  required
-                  value={form.visitCustomerCount}
-                  onChange={(e) => updateField("visitCustomerCount", e.target.value)}
-                />
-              </div>
+                              <div className="small">
+                                Doanh số dự kiến:{" "}
+                                <span className="kbd">
+                                  {formatVND(item.expectedRevenue || 0)}
+                                </span>
+                              </div>
 
-              <div>
-                <FieldLabel required>Doanh số của cả chuyến đi cùng TDV (VND)</FieldLabel>
-                <input
-                  type="number"
-                  min="0"
-                  required
-                  value={form.tripRevenue}
-                  onChange={(e) => updateField("tripRevenue", e.target.value)}
-                />
-                <div className="small" style={{ marginTop: 6 }}>
-                  {formatVND(form.tripRevenue || 0)}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid two" style={{ marginTop: 12 }}>
-              <div>
-                <FieldLabel required>Tổng số khách hàng TDV phụ trách</FieldLabel>
-                <input
-                  type="number"
-                  min="0"
-                  required
-                  value={form.assignedCustomerCount}
-                  onChange={(e) =>
-                    updateField("assignedCustomerCount", e.target.value)
-                  }
-                />
-              </div>
-
-              <div>
-                <FieldLabel required>Số khách hàng chưa khai thác</FieldLabel>
-                <input
-                  type="number"
-                  min="0"
-                  required
-                  value={form.unexploredCustomerCount}
-                  onChange={(e) =>
-                    updateField("unexploredCustomerCount", e.target.value)
-                  }
-                />
-              </div>
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <FieldLabel required>Tổng số khách hàng trên toàn địa bàn</FieldLabel>
-              <input
-                type="number"
-                min="0"
-                required
-                value={form.totalMarketCustomerCount}
-                onChange={(e) =>
-                  updateField("totalMarketCustomerCount", e.target.value)
-                }
-              />
-            </div>
-
-            <div className="hr" />
-
-            <FieldLabel required>Điểm mạnh của nhân viên trong chuyến đi</FieldLabel>
-            <textarea
-              required
-              rows={4}
-              value={form.employeeStrengths}
-              onChange={(e) => updateField("employeeStrengths", e.target.value)}
-            />
-
-            <FieldLabel required>Điểm yếu của nhân viên trong chuyến đi</FieldLabel>
-            <textarea
-              required
-              rows={4}
-              value={form.employeeWeaknesses}
-              onChange={(e) => updateField("employeeWeaknesses", e.target.value)}
-            />
-
-            <div className="hr" />
-
-            <div className="grid two">
-              <div>
-                <FieldLabel>Doanh số mặt hàng</FieldLabel>
-                <select
-                  value={selectedProductId}
-                  onChange={(e) => setSelectedProductId(e.target.value)}
-                >
-                  <option value="">-- Chọn mặt hàng --</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} · {p.unit} · {formatVND(p.price || 0)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "end" }}>
-                <button
-                  className="btn secondary"
-                  type="button"
-                  onClick={addSelectedProduct}
-                >
-                  Thêm mặt hàng
-                </button>
-              </div>
-            </div>
-
-            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-              {form.productLines.length === 0 ? (
-                <div className="small">Chưa có mặt hàng nào được thêm.</div>
-              ) : (
-                form.productLines.map((item, index) => (
-                  <div
-                    key={item.productId}
-                    className="card"
-                    style={{ boxShadow: "none" }}
-                  >
-                    <div className="card-body">
-                      <div className="grid two" style={{ gap: 12 }}>
-                        <div>
-                          <div style={{ fontWeight: 900, fontSize: 16 }}>
-                            {item.productName}
-                          </div>
-                          <div className="small" style={{ marginTop: 6 }}>
-                            Đơn vị tính: <span className="kbd">{item.unit}</span>
-                          </div>
-                          <div className="small" style={{ marginTop: 4 }}>
-                            Giá bán: <span className="kbd">{formatVND(item.price)}</span>
-                          </div>
-                        </div>
-
-                        <div style={{ display: "grid", gap: 8 }}>
-                          <div>
-                            <FieldLabel required>Số lượng</FieldLabel>
-                            <input
-                              type="number"
-                              min="0"
-                              required
-                              value={item.quantity}
-                              onChange={(e) =>
-                                updateProductLineQuantity(index, e.target.value)
-                              }
-                            />
-                          </div>
-
-                          <div className="small">
-                            Doanh số dự kiến:{" "}
-                            <span className="kbd">
-                              {formatVND(item.expectedRevenue || 0)}
-                            </span>
-                          </div>
-
-                          <div>
-                            <button
-                              className="btn secondary"
-                              type="button"
-                              onClick={() => removeProductLine(index)}
-                            >
-                              Xóa mặt hàng
-                            </button>
+                              <div>
+                                <button
+                                  className="btn secondary"
+                                  type="button"
+                                  onClick={() => removeProductLine(index)}
+                                >
+                                  Xóa mặt hàng
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+                    ))
+                  )}
+                </div>
 
-            <div className="pill" style={{ marginTop: 12 }}>
-              <span className="small">Tổng doanh số dự kiến:</span>{" "}
-              <span className="kbd">{formatVND(totalExpectedRevenue)}</span>
-            </div>
-
-            <div className="hr" />
-
-            <div>
-              <FieldLabel required>
-                Nhập file báo cáo doanh số tuần làm việc (Excel từ ERP VP-PHARM)
-              </FieldLabel>
-              <input
-                required
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={(e) => updateField("excelFile", e.target.files?.[0] || null)}
-              />
-              <div className="small" style={{ marginTop: 8 }}>
-                {form.excelFile
-                  ? `Đã chọn file: ${form.excelFile.name}`
-                  : "Chưa chọn file Excel."}
+                <div
+                  className="pill"
+                  style={{
+                    marginTop: 14,
+                    justifyContent: "center",
+                    display: "inline-flex",
+                    padding: "10px 14px",
+                  }}
+                >
+                  <span className="small">Tổng doanh số dự kiến:</span>{" "}
+                  <span className="kbd">{formatVND(totalExpectedRevenue)}</span>
+                </div>
               </div>
             </div>
 
-            <div style={{ height: 14 }} />
+            <div className="card" style={{ boxShadow: "none" }}>
+              <div className="card-body">
+                <SectionTitle
+                  title="File Excel đối soát"
+                  subtitle="Tải lên file Excel báo cáo tuần từ ERP VP-PHARM để lưu cùng báo cáo AI."
+                />
+
+                <FieldLabel required>
+                  Nhập file báo cáo doanh số tuần làm việc (Excel từ ERP VP-PHARM)
+                </FieldLabel>
+                <input
+                  required
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => updateField("excelFile", e.target.files?.[0] || null)}
+                />
+                <div className="small" style={{ marginTop: 8 }}>
+                  {form.excelFile
+                    ? `Đã chọn file: ${form.excelFile.name}`
+                    : "Chưa chọn file Excel."}
+                </div>
+              </div>
+            </div>
 
             <div
-  className="row"
-  style={{
-    justifyContent: "center",
-    marginTop: 10
-  }}
->
-  <button
-    className="btn"
-    type="submit"
-    disabled={loading}
-    style={{
-      padding: "12px 24px",
-      fontSize: 15
-    }}
-  >
-    {loading ? "AI đang phân tích..." : "PHÂN TÍCH BÁO CÁO VÀ LƯU TRỮ"}
-  </button>
-</div>
+              className="row"
+              style={{
+                justifyContent: "center",
+                marginTop: 6,
+              }}
+            >
+              <button
+                className="btn"
+                type="submit"
+                disabled={loading}
+                style={{
+                  padding: "14px 28px",
+                  fontSize: 15,
+                  minWidth: 320,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.4,
+                }}
+              >
+                {loading ? "AI đang phân tích..." : "PHÂN TÍCH BÁO CÁO VÀ LƯU TRỮ"}
+              </button>
+            </div>
           </form>
         </div>
       </div>
 
       <div className="card">
         <div
-  className="card-header"
-  style={{
-    textAlign: "center"
-  }}
->
-  <h2>KẾT QUẢ PHÂN TÍCH BÁO CÁO BẰNG AI</h2>
-</div>
+          className="card-header"
+          style={{
+            textAlign: "center",
+            paddingBottom: 8,
+          }}
+        >
+          <h2
+            style={{
+              letterSpacing: 0.8,
+              textTransform: "uppercase",
+            }}
+          >
+            KẾT QUẢ PHÂN TÍCH BÁO CÁO BẰNG AI
+          </h2>
+          <p>Tổng hợp đánh giá điều hành từ dữ liệu báo cáo tuần và file Excel đính kèm.</p>
+        </div>
 
         <div className="card-body">
+          <div className="grid two" style={{ marginBottom: 14 }}>
+            <StatCard
+              title="Tên báo cáo"
+              value={reportDisplayName || "-"}
+              sub="Sinh tự động theo tuần làm việc và nhân viên"
+            />
+            <StatCard
+              title="Doanh số dự kiến"
+              value={formatVND(totalExpectedRevenue)}
+              sub="Tổng từ toàn bộ mặt hàng đã nhập"
+            />
+          </div>
+
           <div
             style={{
               whiteSpace: "pre-wrap",
-              background: "rgba(255,255,255,.06)",
-              padding: 14,
-              borderRadius: 14,
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04))",
+              padding: 18,
+              borderRadius: 18,
               border: "1px solid rgba(255,255,255,.10)",
-              minHeight: 180,
+              minHeight: 220,
+              lineHeight: 1.7,
+              fontSize: 14,
             }}
           >
             {analysisText || "Chưa có kết quả."}
           </div>
 
           {analysisJson ? (
-            <details style={{ marginTop: 12 }}>
-              <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+            <details style={{ marginTop: 14 }}>
+              <summary
+                style={{
+                  cursor: "pointer",
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.3,
+                }}
+              >
                 Xem JSON cấu trúc
               </summary>
               <pre
@@ -981,9 +1164,10 @@ export default function Weekly({
                   overflow: "auto",
                   background: "rgba(0,0,0,.25)",
                   color: "#d6e2ff",
-                  padding: 12,
-                  borderRadius: 12,
+                  padding: 14,
+                  borderRadius: 14,
                   marginTop: 10,
+                  border: "1px solid rgba(255,255,255,.10)",
                 }}
               >
                 {JSON.stringify(analysisJson, null, 2)}
