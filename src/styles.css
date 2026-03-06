@@ -125,17 +125,23 @@ label{
   margin:12px 0 6px;
 }
 
-input,textarea,select{
+input,
+textarea,
+select{
   width:100%;
   padding:11px 12px;
   border-radius:14px;
   border:1px solid rgba(255,255,255,.15);
   background:rgba(255,255,255,.06);
   color:var(--text);
+  appearance:none;
+  -webkit-appearance:none;
+  -moz-appearance:none;
 }
 
 input:focus,
-textarea:focus{
+textarea:focus,
+select:focus{
   outline:none;
   border-color:rgba(20,184,166,.6);
   background:rgba(255,255,255,.09);
@@ -143,6 +149,29 @@ textarea:focus{
 
 textarea{
   resize:vertical;
+}
+
+/* Sửa lỗi dropdown bị chìm màu */
+select{
+  cursor:pointer;
+}
+
+select option{
+  color:#111827;
+  background:#ffffff;
+}
+
+select optgroup{
+  color:#111827;
+  background:#ffffff;
+}
+
+select:disabled,
+input:disabled,
+textarea:disabled{
+  opacity:1;
+  color:rgba(255,255,255,.72);
+  cursor:not-allowed;
 }
 
 .btn{
