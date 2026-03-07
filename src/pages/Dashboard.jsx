@@ -396,8 +396,8 @@ function ChartCard({ title, subtitle, data, dataKey = "value", valueFormatter })
 
   return (
     <SectionCard title={title} subtitle={subtitle} icon={<BarChart3 size={18} />}>
-      <div style={{ width: "100%", height: 320 }}>
-        <ResponsiveContainer>
+      <div style={{ width: "100%", minWidth: 0, height: 320 }}>
+        <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
             <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
             <XAxis dataKey="shortLabel" stroke="rgba(255,255,255,.65)" tick={{ fontSize: 12 }} />
@@ -446,8 +446,8 @@ function TrendCard({ data }) {
       subtitle="Theo tuần làm việc của báo cáo"
       icon={<TrendingUp size={18} />}
     >
-      <div style={{ width: "100%", height: 320 }}>
-        <ResponsiveContainer>
+      <div style={{ width: "100%", minWidth: 0, height: 320 }}>
+        <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
             <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
             <XAxis dataKey="label" stroke="rgba(255,255,255,.65)" tick={{ fontSize: 12 }} />
@@ -1100,14 +1100,34 @@ export default function Dashboard({
         });
 
         const data = await res.json().catch(() => ({}));
+        console.log("Executive AI response:", data);
 
         if (!res.ok) {
           throw new Error(data?.error || data?.detail || data?.message || "AI điều hành lỗi");
         }
 
         const executiveData = {
-          analysis_json: data?.analysis_json || null,
-          analysis_text: data?.analysis_text || "",
+          executiveSummary: data?.executiveSummary || "",
+          systemRisks: Array.isArray(data?.systemRisks) ? data.systemRisks : [],
+          keyOpportunities: Array.isArray(data?.keyOpportunities)
+            ? data.keyOpportunities
+            : [],
+          performanceAlerts: Array.isArray(data?.performanceAlerts)
+            ? data.performanceAlerts
+            : [],
+          notableTrends: Array.isArray(data?.notableTrends) ? data.notableTrends : [],
+          employeeInsights: Array.isArray(data?.employeeInsights)
+            ? data.employeeInsights
+            : [],
+          provinceInsights: Array.isArray(data?.provinceInsights)
+            ? data.provinceInsights
+            : [],
+          productInsights: Array.isArray(data?.productInsights)
+            ? data.productInsights
+            : [],
+          strategicActions: Array.isArray(data?.strategicActions)
+            ? data.strategicActions
+            : [],
           durationMs: data?.durationMs || 0,
           executive_input: data?.executive_input || null,
         };
@@ -1159,12 +1179,8 @@ export default function Dashboard({
     scopeLabel,
   ]);
 
-  const executiveJson = executiveAi?.analysis_json || null;
-  const executiveSummary =
-    executiveJson?.executiveSummary ||
-    executiveJson?.ceoBrief ||
-    executiveAi?.analysis_text ||
-    "";
+  const executiveJson = executiveAi || null;
+  const executiveSummary = executiveAi?.executiveSummary || "";
 
   const systemRisks = useMemo(
     () => normalizeExecutiveBlock(executiveJson?.systemRisks),
@@ -1198,6 +1214,17 @@ export default function Dashboard({
     () => normalizeExecutiveBlock(executiveJson?.strategicActions),
     [executiveJson]
   );
+
+  const hasExecutiveAi =
+    !!executiveSummary ||
+    systemRisks.length > 0 ||
+    keyOpportunities.length > 0 ||
+    performanceAlerts.length > 0 ||
+    notableTrends.length > 0 ||
+    employeeInsights.length > 0 ||
+    provinceInsights.length > 0 ||
+    productInsights.length > 0 ||
+    strategicActions.length > 0;
 
   const healthTone = scoreTone(analytics.healthScore);
 
@@ -1562,7 +1589,7 @@ export default function Dashboard({
               {executiveAiError}
             </div>
           </div>
-        ) : !executiveJson ? (
+        ) : !hasExecutiveAi ? (
           <div className="small">Chưa có kết quả AI điều hành cấp cao.</div>
         ) : (
           <div style={{ display: "grid", gap: 14 }}>
