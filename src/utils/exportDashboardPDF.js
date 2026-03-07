@@ -105,6 +105,16 @@ function buildExecutiveSummary({
   )}. Chỉ số sức khỏe điều hành AI hiện ở mức ${score}/100, phản ánh bức tranh điều hành ${state}.`;
 }
 
+function normalizeInsightItem(item) {
+  if (typeof item === "string") return item;
+  if (item?.title) return `${item.title}${item?.reason ? `: ${item.reason}` : ""}`;
+  if (item?.action) return item.action;
+  if (item?.name) return item.name;
+  if (item?.label) return item.label;
+  if (item?.description) return item.description;
+  return item ? JSON.stringify(item) : "";
+}
+
 function cardKPI(label, value, sub = "") {
   return `
     <div class="kpi-card">
@@ -121,10 +131,16 @@ function listBlock(title, items = [], type = "default") {
       ? "list danger"
       : type === "success"
       ? "list success"
+      : type === "accent"
+      ? "list accent"
       : "list";
 
-  const content = items.length
-    ? items
+  const normalizedItems = normalizeArray(items)
+    .map(normalizeInsightItem)
+    .filter(Boolean);
+
+  const content = normalizedItems.length
+    ? normalizedItems
         .map(
           (item) => `
             <li>
@@ -225,7 +241,11 @@ function extractDashboardData(raw = {}) {
     raw.totalExpectedRevenue ??
     metrics.totalExpectedRevenue ??
     weeklyReports.reduce(
-      (sum, item) => sum + Number(item.expectedRevenue || 0),
+      (sum, item) =>
+        sum +
+        Number(
+          item.totalExpectedRevenue ?? item.expectedRevenue ?? 0
+        ),
       0
     );
 
@@ -240,6 +260,32 @@ function extractDashboardData(raw = {}) {
 
   const healthScore =
     raw.healthScore ?? metrics.healthScore ?? getHealthScore(metrics);
+
+  const insights = normalizeArray(ai.insights || raw.insights).map(normalizeInsightItem);
+  const risks = normalizeArray(ai.risks || raw.risks).map(normalizeInsightItem);
+  const opportunities = normalizeArray(ai.opportunities || raw.opportunities).map(
+    normalizeInsightItem
+  );
+
+  const executiveWins = normalizeArray(
+    ai.executiveWins || raw.executiveWins || raw.wins
+  ).map(normalizeInsightItem);
+
+  const executiveWarnings = normalizeArray(
+    ai.executiveWarnings || raw.executiveWarnings || raw.warnings
+  ).map(normalizeInsightItem);
+
+  const suggestedActions = normalizeArray(
+    ai.suggestedActions || raw.suggestedActions || raw.actions
+  ).map(normalizeInsightItem);
+
+  const topEmployees = normalizeArray(
+    ranking.topEmployees || charts.topEmployees || raw.topEmployees
+  );
+
+  const topProvinces = normalizeArray(
+    ranking.topProvinces || charts.topProvinces || raw.topProvinces
+  );
 
   return {
     companyName: raw.companyName || "VP-PHARM",
@@ -273,25 +319,14 @@ function extractDashboardData(raw = {}) {
         score: healthScore,
       }),
 
-    executiveWins: normalizeArray(
-      ai.executiveWins || raw.executiveWins || raw.wins
-    ),
-    executiveWarnings: normalizeArray(
-      ai.executiveWarnings || raw.executiveWarnings || raw.warnings
-    ),
-    suggestedActions: normalizeArray(
-      ai.suggestedActions || raw.suggestedActions || raw.actions
-    ),
-    insights: normalizeArray(ai.insights || raw.insights),
-    risks: normalizeArray(ai.risks || raw.risks),
-    opportunities: normalizeArray(ai.opportunities || raw.opportunities),
-
-    topEmployees: normalizeArray(
-      ranking.topEmployees || charts.topEmployees || raw.topEmployees
-    ),
-    topProvinces: normalizeArray(
-      ranking.topProvinces || charts.topProvinces || raw.topProvinces
-    ),
+    executiveWins,
+    executiveWarnings,
+    suggestedActions,
+    insights,
+    risks,
+    opportunities,
+    topEmployees,
+    topProvinces,
   };
 }
 
@@ -566,6 +601,11 @@ function buildStyles() {
         border-color: #fecaca;
       }
 
+      .list.accent {
+        background: #eef6ff;
+        border-color: #bfd9ff;
+      }
+
       .list-title {
         font-size: 14px;
         font-weight: 800;
@@ -699,7 +739,10 @@ function buildStyles() {
   `;
 }
 
-function createPageShell(content, { pageTitle, pageNumber, reportDate, logoUrl }) {
+function createPageShell(
+  content,
+  { pageTitle, pageNumber, totalPages, reportDate, logoUrl }
+) {
   return `
     <section class="pdf-page">
       <div class="page-header">
@@ -720,7 +763,7 @@ function createPageShell(content, { pageTitle, pageNumber, reportDate, logoUrl }
 
       <div class="page-footer">
         <span>Báo cáo điều hành VP-PHARM</span>
-        <span>Trang ${pageNumber}/5</span>
+        <span>Trang ${pageNumber}/${totalPages}</span>
       </div>
     </section>
   `;
@@ -729,195 +772,178 @@ function createPageShell(content, { pageTitle, pageNumber, reportDate, logoUrl }
 function buildPages(data) {
   const scoreTag = getScoreLabel(data.healthScore);
 
-  const page1 = createPageShell(
-    `
-      <div class="hero">
-        <div class="hero-label">Tóm tắt điều hành</div>
-        <div class="hero-title">Báo cáo điều hành tuần</div>
-        <div class="hero-desc">${escapeHtml(data.ceoBrief)}</div>
-        <div class="score-box">
-          <div class="score-number">${data.healthScore}/100</div>
-          <div class="score-meta">
-            <div><strong>Chỉ số sức khỏe điều hành AI</strong></div>
-            <div>${escapeHtml(scoreTag.label)}</div>
+  const pagesContent = [
+    {
+      title: "Trang 1 · Tóm tắt điều hành",
+      content: `
+        <div class="hero">
+          <div class="hero-label">Tóm tắt điều hành</div>
+          <div class="hero-title">Báo cáo điều hành tuần</div>
+          <div class="hero-desc">${escapeHtml(data.ceoBrief)}</div>
+          <div class="score-box">
+            <div class="score-number">${data.healthScore}/100</div>
+            <div class="score-meta">
+              <div><strong>Chỉ số sức khỏe điều hành AI</strong></div>
+              <div>${escapeHtml(scoreTag.label)}</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="summary-card">
-        <div class="section-title">Tóm tắt tổng quan</div>
-        <div class="section-text">
-          ${escapeHtml(
-            buildExecutiveSummary({
-              totalReports: data.totalReports,
-              totalVisits: data.totalVisits,
-              totalTripRevenue: data.totalTripRevenue,
-              totalExpectedRevenue: data.totalExpectedRevenue,
-              activeEmployees: data.activeEmployees,
-              score: data.healthScore,
-            })
-          )}
+        <div class="summary-card">
+          <div class="section-title">Tóm tắt tổng quan</div>
+          <div class="section-text">
+            ${escapeHtml(
+              buildExecutiveSummary({
+                totalReports: data.totalReports,
+                totalVisits: data.totalVisits,
+                totalTripRevenue: data.totalTripRevenue,
+                totalExpectedRevenue: data.totalExpectedRevenue,
+                activeEmployees: data.activeEmployees,
+                score: data.healthScore,
+              })
+            )}
+          </div>
         </div>
-      </div>
 
-      <div class="grid-2">
-        ${listBlock("Điểm tốt nổi bật", data.executiveWins, "success")}
-        ${listBlock("Cảnh báo điều hành", data.executiveWarnings, "danger")}
-      </div>
-    `,
+        <div class="grid-2">
+          ${listBlock("Điểm tốt nổi bật", data.executiveWins, "success")}
+          ${listBlock("Cảnh báo điều hành", data.executiveWarnings, "danger")}
+        </div>
+      `,
+    },
     {
-      pageTitle: "Trang 1 · Tóm tắt điều hành",
-      pageNumber: 1,
+      title: "Trang 2 · Tổng quan chỉ số",
+      content: `
+        <div class="section-title">Tổng quan chỉ số</div>
+
+        <div class="grid-4" style="margin-bottom:16px;">
+          ${cardKPI("Tổng báo cáo", formatNumber(data.totalReports), "Số báo cáo tuần đã ghi nhận")}
+          ${cardKPI("Tổng khách viếng thăm", formatNumber(data.totalVisits), "Lượt tiếp cận khách hàng")}
+          ${cardKPI("Doanh số chuyến đi", formatCurrency(data.totalTripRevenue), "Doanh số đã thực hiện")}
+          ${cardKPI("Doanh số dự kiến", formatCurrency(data.totalExpectedRevenue), "Tổng từ cơ cấu mặt hàng")}
+          ${cardKPI("Nhân viên hoạt động", formatNumber(data.activeEmployees), "Có báo cáo trong kỳ")}
+          ${cardKPI("Chỉ số sức khỏe điều hành AI", `${data.healthScore}/100`, scoreTag.label)}
+        </div>
+
+        <div class="summary-card">
+          <div class="section-title">Cơ cấu chỉ số sức khỏe</div>
+          <div class="metric-strip">
+            <div class="metric-mini">
+              <div class="name">Mức độ hoạt động</div>
+              <div class="val">${formatPercent(data.coverageScore)}</div>
+            </div>
+            <div class="metric-mini">
+              <div class="name">Chất lượng doanh số</div>
+              <div class="val">${formatPercent(data.salesQualityScore)}</div>
+            </div>
+            <div class="metric-mini">
+              <div class="name">Kiểm soát thị trường</div>
+              <div class="val">${formatPercent(data.marketExecutionScore)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="section-title">Diễn giải điều hành</div>
+          <div class="section-text">
+            Chỉ số sức khỏe điều hành AI hiện đạt <strong>${data.healthScore}/100</strong>, trong đó Mức độ hoạt động = ${formatPercent(
+        data.coverageScore
+      )}, Chất lượng doanh số = ${formatPercent(
+        data.salesQualityScore
+      )}, Kiểm soát thị trường = ${formatPercent(
+        data.marketExecutionScore
+      )}. Đây là chỉ báo tổng hợp để Ban điều hành theo dõi cường độ hoạt động bán hàng, chất lượng doanh số và mức độ bao phủ thị trường.
+          </div>
+        </div>
+      `,
+    },
+    {
+      title: "Trang 3 · Nhận định từ AI",
+      content: `
+        <div class="section-title">Nhận định từ AI</div>
+
+        <div class="grid-2" style="margin-bottom:16px;">
+          ${listBlock("Nhận định chính", data.insights, "accent")}
+          ${listBlock("Cơ hội nổi bật", data.opportunities, "success")}
+        </div>
+
+        <div class="grid-2">
+          ${listBlock("Rủi ro cần lưu ý", data.risks, "danger")}
+          ${listBlock("Hành động đề xuất", data.suggestedActions)}
+        </div>
+      `,
+    },
+    {
+      title: "Trang 4 · Xếp hạng nổi bật",
+      content: `
+        <div class="section-title">Xếp hạng nổi bật</div>
+
+        <div class="grid-2">
+          ${rankingTable("Top nhân viên", data.topEmployees, "employee")}
+          ${rankingTable("Top địa bàn", data.topProvinces, "province")}
+        </div>
+      `,
+    },
+    {
+      title: "Trang 5 · Định hướng hành động",
+      content: `
+        <div class="section-title">Định hướng hành động</div>
+
+        <div class="grid-2" style="margin-bottom:16px;">
+          <div class="action-card">
+            <div class="action-title">Ưu tiên 1 · Tăng cường mức độ hoạt động</div>
+            <div class="action-body">
+              Tập trung rà soát nhân sự có số lượt viếng thăm thấp, nâng mật độ tiếp cận khách hàng trên tệp đang phụ trách và cải thiện cường độ hoạt động thực địa.
+            </div>
+          </div>
+
+          <div class="action-card">
+            <div class="action-title">Ưu tiên 2 · Nâng chất lượng doanh số</div>
+            <div class="action-body">
+              Đối chiếu doanh số chuyến đi và doanh số dự kiến để xác định điểm nghẽn chuyển đổi, đồng thời coaching nhóm có doanh số cao nhưng chất lượng chốt đơn chưa ổn định.
+            </div>
+          </div>
+
+          <div class="action-card">
+            <div class="action-title">Ưu tiên 3 · Tối ưu bao phủ thị trường</div>
+            <div class="action-body">
+              Kiểm tra lại mức độ phân bổ khách hàng phụ trách trên từng địa bàn, tránh tình trạng thị trường lớn nhưng tệp khách hàng đang quản lý còn mỏng.
+            </div>
+          </div>
+
+          <div class="action-card">
+            <div class="action-title">Ưu tiên 4 · Theo dõi điều hành hàng tuần</div>
+            <div class="action-body">
+              Duy trì cơ chế tổng hợp điều hành mỗi tuần, so sánh xu hướng chỉ số sức khỏe điều hành AI theo chu kỳ và xác nhận các hành động sau họp đã được triển khai thực tế hay chưa.
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="section-title">Khuyến nghị điều hành</div>
+          <div class="section-text">
+            ${escapeHtml(
+              data.suggestedActions.length
+                ? data.suggestedActions.join(" ")
+                : "Ban điều hành nên sử dụng đồng thời các chỉ số tổng quan, nhận định AI và xếp hạng nổi bật để ưu tiên hành động trong tuần kế tiếp."
+            )}
+          </div>
+        </div>
+      `,
+    },
+  ];
+
+  const totalPages = pagesContent.length;
+
+  return pagesContent.map((page, index) =>
+    createPageShell(page.content, {
+      pageTitle: page.title,
+      pageNumber: index + 1,
+      totalPages,
       reportDate: data.reportDate,
       logoUrl: data.logoUrl,
-    }
+    })
   );
-
-  const page2 = createPageShell(
-    `
-      <div class="section-title">Tổng quan chỉ số</div>
-
-      <div class="grid-4" style="margin-bottom:16px;">
-        ${cardKPI("Tổng báo cáo", formatNumber(data.totalReports), "Số báo cáo tuần đã ghi nhận")}
-        ${cardKPI("Tổng khách viếng thăm", formatNumber(data.totalVisits), "Lượt tiếp cận khách hàng")}
-        ${cardKPI("Doanh số chuyến đi", formatCurrency(data.totalTripRevenue), "Doanh số đã thực hiện")}
-        ${cardKPI("Doanh số dự kiến", formatCurrency(data.totalExpectedRevenue), "Tổng từ cơ cấu mặt hàng")}
-        ${cardKPI("Nhân viên hoạt động", formatNumber(data.activeEmployees), "Có báo cáo trong kỳ")}
-        ${cardKPI("Chỉ số sức khỏe điều hành AI", `${data.healthScore}/100`, scoreTag.label)}
-      </div>
-
-      <div class="summary-card">
-        <div class="section-title">Cơ cấu chỉ số sức khỏe</div>
-        <div class="metric-strip">
-          <div class="metric-mini">
-            <div class="name">Mức độ hoạt động</div>
-            <div class="val">${formatPercent(data.coverageScore)}</div>
-          </div>
-          <div class="metric-mini">
-            <div class="name">Chất lượng doanh số</div>
-            <div class="val">${formatPercent(data.salesQualityScore)}</div>
-          </div>
-          <div class="metric-mini">
-            <div class="name">Kiểm soát thị trường</div>
-            <div class="val">${formatPercent(data.marketExecutionScore)}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="summary-card">
-        <div class="section-title">Diễn giải điều hành</div>
-        <div class="section-text">
-          Chỉ số sức khỏe điều hành AI hiện đạt <strong>${data.healthScore}/100</strong>, trong đó Mức độ hoạt động = ${formatPercent(
-      data.coverageScore
-    )}, Chất lượng doanh số = ${formatPercent(
-      data.salesQualityScore
-    )}, Kiểm soát thị trường = ${formatPercent(
-      data.marketExecutionScore
-    )}. Đây là chỉ báo tổng hợp để Ban điều hành theo dõi cường độ hoạt động bán hàng, chất lượng doanh số và mức độ bao phủ thị trường.
-        </div>
-      </div>
-    `,
-    {
-      pageTitle: "Trang 2 · Tổng quan chỉ số",
-      pageNumber: 2,
-      reportDate: data.reportDate,
-      logoUrl: data.logoUrl,
-    }
-  );
-
-  const page3 = createPageShell(
-    `
-      <div class="section-title">Nhận định từ AI</div>
-
-      <div class="grid-2" style="margin-bottom:16px;">
-        ${listBlock("Nhận định chính", data.insights)}
-        ${listBlock("Cơ hội nổi bật", data.opportunities, "success")}
-      </div>
-
-      <div class="grid-2">
-        ${listBlock("Rủi ro cần lưu ý", data.risks, "danger")}
-        ${listBlock("Hành động đề xuất", data.suggestedActions)}
-      </div>
-    `,
-    {
-      pageTitle: "Trang 3 · Nhận định từ AI",
-      pageNumber: 3,
-      reportDate: data.reportDate,
-      logoUrl: data.logoUrl,
-    }
-  );
-
-  const page4 = createPageShell(
-    `
-      <div class="section-title">Xếp hạng nổi bật</div>
-
-      <div class="grid-2">
-        ${rankingTable("Top nhân viên", data.topEmployees, "employee")}
-        ${rankingTable("Top địa bàn", data.topProvinces, "province")}
-      </div>
-    `,
-    {
-      pageTitle: "Trang 4 · Xếp hạng nổi bật",
-      pageNumber: 4,
-      reportDate: data.reportDate,
-      logoUrl: data.logoUrl,
-    }
-  );
-
-  const page5 = createPageShell(
-    `
-      <div class="section-title">Định hướng hành động</div>
-
-      <div class="grid-2" style="margin-bottom:16px;">
-        <div class="action-card">
-          <div class="action-title">Ưu tiên 1 · Tăng cường mức độ hoạt động</div>
-          <div class="action-body">
-            Tập trung rà soát nhân sự có số lượt viếng thăm thấp, nâng mật độ tiếp cận khách hàng trên tệp đang phụ trách và cải thiện cường độ hoạt động thực địa.
-          </div>
-        </div>
-
-        <div class="action-card">
-          <div class="action-title">Ưu tiên 2 · Nâng chất lượng doanh số</div>
-          <div class="action-body">
-            Đối chiếu doanh số chuyến đi và doanh số dự kiến để xác định điểm nghẽn chuyển đổi, đồng thời coaching nhóm có doanh số cao nhưng chất lượng chốt đơn chưa ổn định.
-          </div>
-        </div>
-
-        <div class="action-card">
-          <div class="action-title">Ưu tiên 3 · Tối ưu bao phủ thị trường</div>
-          <div class="action-body">
-            Kiểm tra lại mức độ phân bổ khách hàng phụ trách trên từng địa bàn, tránh tình trạng thị trường lớn nhưng tệp khách hàng đang quản lý còn mỏng.
-          </div>
-        </div>
-
-        <div class="action-card">
-          <div class="action-title">Ưu tiên 4 · Theo dõi điều hành hàng tuần</div>
-          <div class="action-body">
-            Duy trì cơ chế tổng hợp điều hành mỗi tuần, so sánh xu hướng chỉ số sức khỏe điều hành AI theo chu kỳ và xác nhận các hành động sau họp đã được triển khai thực tế hay chưa.
-          </div>
-        </div>
-      </div>
-
-      <div class="summary-card">
-        <div class="section-title">Khuyến nghị điều hành</div>
-        <div class="section-text">
-          ${escapeHtml(
-            data.suggestedActions.length
-              ? data.suggestedActions.join(" ")
-              : "Ban điều hành nên sử dụng đồng thời các chỉ số tổng quan, nhận định AI và xếp hạng nổi bật để ưu tiên hành động trong tuần kế tiếp."
-          )}
-        </div>
-      </div>
-    `,
-    {
-      pageTitle: "Trang 5 · Định hướng hành động",
-      pageNumber: 5,
-      reportDate: data.reportDate,
-      logoUrl: data.logoUrl,
-    }
-  );
-
-  return [page1, page2, page3, page4, page5];
 }
 
 function buildDocumentHtml(data) {
