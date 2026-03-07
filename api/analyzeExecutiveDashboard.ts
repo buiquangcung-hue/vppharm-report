@@ -1,14 +1,10 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
+export default async function handler(req: any, res: any) {
   try {
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
@@ -45,9 +41,9 @@ Hãy phân tích dữ liệu dashboard sau và trả về JSON hợp lệ với 
 
 Yêu cầu:
 - executiveSummary: string
-- các mục còn lại: mảng string hoặc mảng object ngắn gọn, rõ ràng
+- các mục còn lại: mảng
 - nội dung bằng tiếng Việt
-- ưu tiên góc nhìn điều hành bán hàng, quản trị địa bàn, nhân sự, sản phẩm, xu hướng doanh thu
+- ngắn gọn, sắc bén, theo góc nhìn điều hành
 
 Bộ lọc:
 ${JSON.stringify(filters, null, 2)}
@@ -64,6 +60,7 @@ Chỉ trả về JSON hợp lệ, không thêm markdown.
     const response = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       temperature: 0.3,
+      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
@@ -75,7 +72,6 @@ Chỉ trả về JSON hợp lệ, không thêm markdown.
           content: prompt,
         },
       ],
-      response_format: { type: "json_object" },
     });
 
     const text = response.choices?.[0]?.message?.content || "{}";
