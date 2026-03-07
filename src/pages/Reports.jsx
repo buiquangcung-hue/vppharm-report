@@ -6,6 +6,7 @@ import {
   orderBy,
   query,
   limit,
+  where,
 } from "firebase/firestore";
 
 function formatTs(ts) {
@@ -267,11 +268,29 @@ export default function Reports({
     const currentUser = auth.currentUser;
     const currentUid = currentUser?.uid || "";
 
-    const reportsQuery = query(
-      collection(db, "weekly_reports"),
-      orderBy("createdAt", "desc"),
-      limit(200)
-    );
+    if (!isAdmin && !isDirector) {
+      setItems([]);
+      setSelectedId("");
+      setError("Bạn không có quyền xem dữ liệu báo cáo.");
+      return;
+    }
+
+    let reportsQuery;
+
+    if (isAdmin) {
+      reportsQuery = query(
+        collection(db, "weekly_reports"),
+        orderBy("createdAt", "desc"),
+        limit(200)
+      );
+    } else {
+      reportsQuery = query(
+        collection(db, "weekly_reports"),
+        where("ownerUid", "==", currentUid),
+        orderBy("createdAt", "desc"),
+        limit(200)
+      );
+    }
 
     const employeesQuery = query(collection(db, "employees"), limit(500));
 
@@ -322,13 +341,13 @@ export default function Reports({
 
         setItems(rows);
 
-        if ((!selectedId || !rows.some((r) => r.id === selectedId)) && rows.length) {
-          setSelectedId(rows[0].id);
-        }
+        setSelectedId((prev) => {
+          if (!rows.length) return "";
+          if (prev && rows.some((r) => r.id === prev)) return prev;
+          return rows[0].id;
+        });
 
-        if (!rows.length) {
-          setSelectedId("");
-        }
+        setError("");
       } catch (err) {
         console.error("Reports filter error:", err);
         setItems([]);
@@ -359,9 +378,8 @@ export default function Reports({
       },
       (err) => {
         console.error("Employees snapshot error:", err);
-        setItems([]);
-        setSelectedId("");
-        setError("Không thể tải danh mục nhân viên để phân quyền báo cáo.");
+        employeesCache = [];
+        applyFilter();
       }
     );
 
@@ -369,7 +387,7 @@ export default function Reports({
       unsubReports();
       unsubEmployees();
     };
-  }, [isAdmin, isDirector, profile?.name, selectedId]);
+  }, [isAdmin, isDirector, profile?.name]);
 
   const selected = useMemo(
     () => items.find((x) => x.id === selectedId) || null,
@@ -717,9 +735,7 @@ export default function Reports({
                     <h2 style={{ textTransform: "uppercase", letterSpacing: 0.6 }}>
                       KẾT QUẢ PHÂN TÍCH BÁO CÁO BẰNG AI
                     </h2>
-                    <p>
-                      Tổng hợp điều hành từ dữ liệu chuyến đi và file Excel
-                    </p>
+                    <p>Tổng hợp điều hành từ dữ liệu chuyến đi và file Excel</p>
                   </div>
 
                   <div className="card-body">
