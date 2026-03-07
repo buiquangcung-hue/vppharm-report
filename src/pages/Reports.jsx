@@ -253,6 +253,26 @@ function InfoBox({ title, value }) {
   );
 }
 
+function mergeUniqueReports(...groups) {
+  const map = new Map();
+
+  groups.flat().forEach((item) => {
+    if (!item?.id) return;
+    const existing = map.get(item.id);
+    if (!existing) {
+      map.set(item.id, item);
+      return;
+    }
+
+    map.set(item.id, {
+      ...existing,
+      ...item,
+    });
+  });
+
+  return [...map.values()].sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
+}
+
 export default function Reports({
   isAdmin = false,
   isDirector = false,
@@ -275,27 +295,13 @@ export default function Reports({
       return;
     }
 
-    let reportsQuery;
-
-    if (isAdmin) {
-      reportsQuery = query(
-        collection(db, "weekly_reports"),
-        orderBy("createdAt", "desc"),
-        limit(200)
-      );
-    } else {
-      reportsQuery = query(
-        collection(db, "weekly_reports"),
-        where("ownerUid", "==", currentUid),
-        orderBy("createdAt", "desc"),
-        limit(200)
-      );
-    }
-
     const employeesQuery = query(collection(db, "employees"), limit(500));
 
-    let reportsCache = [];
     let employeesCache = [];
+    let adminReportsCache = [];
+    let ownReportsCache = [];
+    let directorReportsCache = [];
+    let directorUidReportsCache = [];
 
     function applyFilter() {
       try {
@@ -315,16 +321,35 @@ export default function Reports({
             .map((emp) => emp.id)
         );
 
-        const rows = reportsCache
+        const sourceRows = isAdmin
+          ? adminReportsCache
+          : mergeUniqueReports(
+              ownReportsCache,
+              directorReportsCache,
+              directorUidReportsCache
+            );
+
+        const rows = sourceRows
           .filter((item) => {
             if (isAdmin) return true;
 
             if (isDirector) {
               const ownerUid = String(item.ownerUid || "").trim();
-              const employeeUid =
-                String(item.employeeUid || item?.input?.employee?.uid || "").trim();
+              const employeeUid = String(
+                item.employeeUid || item?.input?.employee?.uid || ""
+              ).trim();
+              const directorUid = String(item?.director?.uid || "").trim();
+              const flatDirectorUid = String(item?.directorUid || "").trim();
 
               if (ownerUid && currentUid && ownerUid === currentUid) {
+                return true;
+              }
+
+              if (directorUid && currentUid && directorUid === currentUid) {
+                return true;
+              }
+
+              if (flatDirectorUid && currentUid && flatDirectorUid === currentUid) {
                 return true;
               }
 
@@ -356,19 +381,7 @@ export default function Reports({
       }
     }
 
-    const unsubReports = onSnapshot(
-      reportsQuery,
-      (snap) => {
-        reportsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        applyFilter();
-      },
-      (err) => {
-        console.error("Reports snapshot error:", err);
-        setItems([]);
-        setSelectedId("");
-        setError("Không thể tải dữ liệu báo cáo. Vui lòng thử lại sau.");
-      }
-    );
+    const unsubscribers = [];
 
     const unsubEmployees = onSnapshot(
       employeesQuery,
@@ -382,10 +395,104 @@ export default function Reports({
         applyFilter();
       }
     );
+    unsubscribers.push(unsubEmployees);
+
+    if (isAdmin) {
+      const adminQuery = query(
+        collection(db, "weekly_reports"),
+        orderBy("createdAt", "desc"),
+        limit(200)
+      );
+
+      const unsubAdmin = onSnapshot(
+        adminQuery,
+        (snap) => {
+          adminReportsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          applyFilter();
+        },
+        (err) => {
+          console.error("Admin reports snapshot error:", err);
+          setItems([]);
+          setSelectedId("");
+          setError("Không thể tải dữ liệu báo cáo. Vui lòng thử lại sau.");
+        }
+      );
+
+      unsubscribers.push(unsubAdmin);
+    }
+
+    if (isDirector) {
+      const ownReportsQuery = query(
+        collection(db, "weekly_reports"),
+        where("ownerUid", "==", currentUid),
+        orderBy("createdAt", "desc"),
+        limit(200)
+      );
+
+      const directorObjectQuery = query(
+        collection(db, "weekly_reports"),
+        where("director.uid", "==", currentUid),
+        orderBy("createdAt", "desc"),
+        limit(200)
+      );
+
+      const directorUidQuery = query(
+        collection(db, "weekly_reports"),
+        where("directorUid", "==", currentUid),
+        orderBy("createdAt", "desc"),
+        limit(200)
+      );
+
+      const unsubOwn = onSnapshot(
+        ownReportsQuery,
+        (snap) => {
+          ownReportsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          applyFilter();
+        },
+        (err) => {
+          console.error("Own reports snapshot error:", err);
+          ownReportsCache = [];
+          applyFilter();
+        }
+      );
+
+      const unsubDirectorObject = onSnapshot(
+        directorObjectQuery,
+        (snap) => {
+          directorReportsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          applyFilter();
+        },
+        (err) => {
+          console.error("Director object snapshot error:", err);
+          directorReportsCache = [];
+          applyFilter();
+        }
+      );
+
+      const unsubDirectorUid = onSnapshot(
+        directorUidQuery,
+        (snap) => {
+          directorUidReportsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          applyFilter();
+        },
+        (err) => {
+          console.error("Director UID snapshot error:", err);
+          directorUidReportsCache = [];
+          applyFilter();
+        }
+      );
+
+      unsubscribers.push(unsubOwn, unsubDirectorObject, unsubDirectorUid);
+    }
 
     return () => {
-      unsubReports();
-      unsubEmployees();
+      unsubscribers.forEach((unsub) => {
+        try {
+          unsub?.();
+        } catch {
+          // ignore
+        }
+      });
     };
   }, [isAdmin, isDirector, profile?.name]);
 
