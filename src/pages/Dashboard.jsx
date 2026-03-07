@@ -41,6 +41,8 @@ import { exportDashboardPDF } from "../utils/exportDashboardPDF";
 const LOGO_URL =
   "https://firebasestorage.googleapis.com/v0/b/cnlb-4d714.firebasestorage.app/o/lOGO%20DOC.png?alt=media&token=ad7d71e2-aa27-4ed5-81d8-9f8ee9ace0ac";
 
+const EXECUTIVE_AI_CACHE_MS = 15 * 60 * 1000;
+
 function formatVND(value) {
   const amount = Number(value || 0);
   return new Intl.NumberFormat("vi-VN", {
@@ -588,6 +590,42 @@ function normalizeInsightItem(item) {
   return item ? JSON.stringify(item) : "";
 }
 
+function normalizeExecutiveBlock(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        const head =
+          item.title ||
+          item.name ||
+          item.label ||
+          item.action ||
+          item.employee ||
+          item.province ||
+          item.productName ||
+          "Mục";
+        const tail =
+          item.reason ||
+          item.description ||
+          item.suggestion ||
+          item.owner ||
+          item.kpi ||
+          item.priority ||
+          "";
+        return `${head}${tail ? `: ${tail}` : ""}`;
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
+function buildScopeLabel(isAdmin, isDirector, profile) {
+  if (isAdmin) return "Toàn hệ thống";
+  if (isDirector) return `Đội phụ trách của ${profile?.name || "giám đốc"}`;
+  return "Giới hạn";
+}
+
 export default function Dashboard({
   isAdmin = false,
   isDirector = false,
@@ -598,6 +636,10 @@ export default function Dashboard({
   const [error, setError] = useState("");
   const [preset, setPreset] = useState("30d");
   const [isExporting, setIsExporting] = useState(false);
+
+  const [executiveAi, setExecutiveAi] = useState(null);
+  const [executiveAiLoading, setExecutiveAiLoading] = useState(false);
+  const [executiveAiError, setExecutiveAiError] = useState("");
 
   const today = useMemo(() => endOfDay(new Date()), []);
   const initialFrom = useMemo(() => fmtDateInput(addDays(today, -29)), [today]);
@@ -861,9 +903,13 @@ export default function Dashboard({
     if (healthScore >= 80) {
       executiveWins.push(`Sức khỏe điều hành đang ở mức tốt với chỉ số AI ${healthScore}/100.`);
     } else if (healthScore >= 60) {
-      executiveWarnings.push(`Chỉ số sức khỏe điều hành AI đang ở mức theo dõi: ${healthScore}/100.`);
+      executiveWarnings.push(
+        `Chỉ số sức khỏe điều hành AI đang ở mức theo dõi: ${healthScore}/100.`
+      );
     } else {
-      executiveWarnings.push(`Chỉ số sức khỏe điều hành AI đang ở mức cảnh báo: ${healthScore}/100.`);
+      executiveWarnings.push(
+        `Chỉ số sức khỏe điều hành AI đang ở mức cảnh báo: ${healthScore}/100.`
+      );
     }
 
     if (currentTripRevenue >= prevTripRevenue) {
@@ -982,6 +1028,177 @@ export default function Dashboard({
     };
   }, [reports, employees, fromDate, toDate, today]);
 
+  const scopeLabel = useMemo(
+    () => buildScopeLabel(isAdmin, isDirector, profile),
+    [isAdmin, isDirector, profile]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function runExecutiveAnalysis() {
+      if (!analytics.currentReports.length) {
+        setExecutiveAi(null);
+        setExecutiveAiError("");
+        setExecutiveAiLoading(false);
+        return;
+      }
+
+      const cacheKey = `vp-executive-ai:${fromDate}:${toDate}:${scopeLabel}:${analytics.totalReports}:${analytics.tripRevenue}:${analytics.expectedRevenue}:${analytics.visits}`;
+
+      try {
+        setExecutiveAiError("");
+
+        const cachedRaw = sessionStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached?.savedAt && Date.now() - cached.savedAt < EXECUTIVE_AI_CACHE_MS) {
+            if (!cancelled) {
+              setExecutiveAi(cached.data || null);
+              setExecutiveAiLoading(false);
+            }
+            return;
+          }
+        }
+
+        if (!cancelled) setExecutiveAiLoading(true);
+
+        const res = await fetch("/api/analyzeExecutiveDashboard", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            filters: {
+              fromDate,
+              toDate,
+              scopeLabel,
+            },
+            metrics: {
+              totalReports: analytics.totalReports,
+              totalVisits: analytics.visits,
+              totalTripRevenue: analytics.tripRevenue,
+              totalExpectedRevenue: analytics.expectedRevenue,
+              activeEmployees: analytics.employeeCount,
+              healthScore: analytics.healthScore,
+              coverageScore: analytics.coverageScore,
+              salesQualityScore: analytics.salesQualityScore,
+              marketExecutionScore: analytics.marketExecutionScore,
+            },
+            ranking: {
+              topEmployees: analytics.topEmployees.map((item) => ({
+                name: item.label,
+                value: item.value,
+              })),
+              topProvinces: analytics.topProvinces.map((item) => ({
+                name: item.label,
+                value: item.value,
+              })),
+            },
+            reports: analytics.currentReports,
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data?.error || data?.detail || data?.message || "AI điều hành lỗi");
+        }
+
+        const executiveData = {
+          analysis_json: data?.analysis_json || null,
+          analysis_text: data?.analysis_text || "",
+          durationMs: data?.durationMs || 0,
+          executive_input: data?.executive_input || null,
+        };
+
+        sessionStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            savedAt: Date.now(),
+            data: executiveData,
+          })
+        );
+
+        if (!cancelled) {
+          setExecutiveAi(executiveData);
+          setExecutiveAiError("");
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setExecutiveAiError("Không thể tải phân tích AI điều hành cấp cao.");
+        }
+      } finally {
+        if (!cancelled) {
+          setExecutiveAiLoading(false);
+        }
+      }
+    }
+
+    runExecutiveAnalysis();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    analytics.currentReports,
+    analytics.totalReports,
+    analytics.tripRevenue,
+    analytics.expectedRevenue,
+    analytics.visits,
+    analytics.employeeCount,
+    analytics.healthScore,
+    analytics.coverageScore,
+    analytics.salesQualityScore,
+    analytics.marketExecutionScore,
+    analytics.topEmployees,
+    analytics.topProvinces,
+    fromDate,
+    toDate,
+    scopeLabel,
+  ]);
+
+  const executiveJson = executiveAi?.analysis_json || null;
+  const executiveSummary =
+    executiveJson?.executiveSummary ||
+    executiveJson?.ceoBrief ||
+    executiveAi?.analysis_text ||
+    "";
+
+  const systemRisks = useMemo(
+    () => normalizeExecutiveBlock(executiveJson?.systemRisks),
+    [executiveJson]
+  );
+  const keyOpportunities = useMemo(
+    () => normalizeExecutiveBlock(executiveJson?.keyOpportunities),
+    [executiveJson]
+  );
+  const performanceAlerts = useMemo(
+    () => normalizeExecutiveBlock(executiveJson?.performanceAlerts),
+    [executiveJson]
+  );
+  const notableTrends = useMemo(
+    () => normalizeExecutiveBlock(executiveJson?.notableTrends),
+    [executiveJson]
+  );
+  const employeeInsights = useMemo(
+    () => normalizeExecutiveBlock(executiveJson?.employeeInsights),
+    [executiveJson]
+  );
+  const provinceInsights = useMemo(
+    () => normalizeExecutiveBlock(executiveJson?.provinceInsights),
+    [executiveJson]
+  );
+  const productInsights = useMemo(
+    () => normalizeExecutiveBlock(executiveJson?.productInsights),
+    [executiveJson]
+  );
+  const strategicActions = useMemo(
+    () => normalizeExecutiveBlock(executiveJson?.strategicActions),
+    [executiveJson]
+  );
+
   const healthTone = scoreTone(analytics.healthScore);
 
   async function handleExportPDF() {
@@ -993,17 +1210,24 @@ export default function Dashboard({
     }
 
     const ceoBrief = [
-      `Báo cáo điều hành trong kỳ ${formatVNDate(analytics.from)} đến ${formatVNDate(
-        analytics.to
-      )} ghi nhận ${analytics.totalReports} báo cáo tuần từ ${
-        analytics.employeeCount
-      } nhân sự hoạt động.`,
-      `Tổng lượt viếng thăm khách hàng đạt ${analytics.visits}, doanh số chuyến đi đạt ${formatVND(
-        analytics.tripRevenue
-      )}, doanh số dự kiến đạt ${formatVND(analytics.expectedRevenue)}.`,
-      `Chỉ số sức khỏe điều hành AI hiện ở mức ${analytics.healthScore}/100, phản ánh trạng thái điều hành ${scoreColor(
-        analytics.healthScore
-      ).toLowerCase()}.`,
+      executiveSummary,
+      !executiveSummary
+        ? `Báo cáo điều hành trong kỳ ${formatVNDate(analytics.from)} đến ${formatVNDate(
+            analytics.to
+          )} ghi nhận ${analytics.totalReports} báo cáo tuần từ ${
+            analytics.employeeCount
+          } nhân sự hoạt động.`
+        : "",
+      !executiveSummary
+        ? `Tổng lượt viếng thăm khách hàng đạt ${analytics.visits}, doanh số chuyến đi đạt ${formatVND(
+            analytics.tripRevenue
+          )}, doanh số dự kiến đạt ${formatVND(analytics.expectedRevenue)}.`
+        : "",
+      !executiveSummary
+        ? `Chỉ số sức khỏe điều hành AI hiện ở mức ${analytics.healthScore}/100, phản ánh trạng thái điều hành ${scoreColor(
+            analytics.healthScore
+          ).toLowerCase()}.`
+        : "",
       analytics.executiveWins[0] || analytics.executiveWarnings[0] || "",
     ]
       .filter(Boolean)
@@ -1028,6 +1252,10 @@ export default function Dashboard({
             analytics.topProvinces[0].value
           )}.`
         : "",
+      ...notableTrends,
+      ...employeeInsights.slice(0, 2),
+      ...provinceInsights.slice(0, 2),
+      ...productInsights.slice(0, 2),
     ].filter(Boolean);
 
     try {
@@ -1051,12 +1279,15 @@ export default function Dashboard({
 
         ai: {
           ceoBrief,
-          executiveWins: analytics.executiveWins,
-          executiveWarnings: analytics.executiveWarnings,
-          suggestedActions: analytics.suggestedActions,
+          executiveWins: [...analytics.executiveWins, ...performanceAlerts].slice(0, 6),
+          executiveWarnings: [...analytics.executiveWarnings, ...systemRisks].slice(0, 6),
+          suggestedActions: [...strategicActions, ...analytics.suggestedActions].slice(0, 8),
           insights: aiInsights,
-          risks: analytics.risks.map(normalizeInsightItem).filter(Boolean),
-          opportunities: analytics.opportunities.map(normalizeInsightItem).filter(Boolean),
+          risks: [...analytics.risks.map(normalizeInsightItem), ...systemRisks].filter(Boolean),
+          opportunities: [
+            ...analytics.opportunities.map(normalizeInsightItem),
+            ...keyOpportunities,
+          ].filter(Boolean),
         },
 
         ranking: {
@@ -1197,6 +1428,10 @@ export default function Dashboard({
                 <span className="small">Độ dài kỳ</span>{" "}
                 <span className="kbd">{analytics.days} ngày</span>
               </span>
+              <span className="pill">
+                <span className="small">Phạm vi</span>{" "}
+                <span className="kbd">{scopeLabel}</span>
+              </span>
               {analytics.lastUpdatedAt ? (
                 <span className="pill">
                   <span className="small">Cập nhật cuối</span>{" "}
@@ -1306,6 +1541,112 @@ export default function Dashboard({
           </div>
         </SectionCard>
       </div>
+
+      <SectionCard
+        title="AI Điều Hành Cấp Giám Đốc"
+        subtitle="Phân tích tổng hợp toàn bộ dữ liệu trong phạm vi đang lọc"
+        icon={<BriefcaseBusiness size={18} />}
+      >
+        {executiveAiLoading ? (
+          <div className="small">AI đang phân tích tổng hợp dữ liệu điều hành…</div>
+        ) : executiveAiError ? (
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 14,
+              border: "1px solid rgba(239,68,68,.35)",
+              background: "rgba(239,68,68,.10)",
+            }}
+          >
+            <div className="small" style={{ color: "#ffd5d5" }}>
+              {executiveAiError}
+            </div>
+          </div>
+        ) : !executiveJson ? (
+          <div className="small">Chưa có kết quả AI điều hành cấp cao.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 14 }}>
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 18,
+                background: "rgba(255,255,255,.05)",
+                border: "1px solid rgba(255,255,255,.10)",
+                lineHeight: 1.7,
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 900,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.4,
+                  marginBottom: 10,
+                }}
+              >
+                Tóm tắt điều hành cấp cao
+              </div>
+              <div>{executiveSummary || "Chưa có tóm tắt điều hành."}</div>
+              {executiveAi?.durationMs ? (
+                <div className="small" style={{ marginTop: 10, opacity: 0.85 }}>
+                  Thời gian AI xử lý: {executiveAi.durationMs} ms
+                </div>
+              ) : null}
+            </div>
+
+            <div className="grid two">
+              <BriefList
+                title="Rủi ro hệ thống"
+                items={systemRisks}
+                icon={<TriangleAlert size={16} />}
+              />
+              <BriefList
+                title="Cơ hội nổi bật"
+                items={keyOpportunities}
+                icon={<Lightbulb size={16} />}
+              />
+            </div>
+
+            <div className="grid two">
+              <BriefList
+                title="Cảnh báo hiệu suất"
+                items={performanceAlerts}
+                icon={<ShieldAlert size={16} />}
+              />
+              <BriefList
+                title="Xu hướng đáng chú ý"
+                items={notableTrends}
+                icon={<TrendingUp size={16} />}
+              />
+            </div>
+
+            <div className="grid two">
+              <BriefList
+                title="Phân tích theo nhân viên"
+                items={employeeInsights}
+                icon={<Users size={16} />}
+              />
+              <BriefList
+                title="Phân tích theo địa bàn"
+                items={provinceInsights}
+                icon={<MapPinned size={16} />}
+              />
+            </div>
+
+            <div className="grid two">
+              <BriefList
+                title="Phân tích theo sản phẩm"
+                items={productInsights}
+                icon={<HandCoins size={16} />}
+              />
+              <BriefList
+                title="Hành động chiến lược"
+                items={strategicActions}
+                icon={<Clock3 size={16} />}
+              />
+            </div>
+          </div>
+        )}
+      </SectionCard>
 
       <div
         style={{
