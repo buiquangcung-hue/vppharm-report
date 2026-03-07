@@ -273,6 +273,21 @@ function mergeUniqueReports(...groups) {
   return [...map.values()].sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
 }
 
+function explainFirestoreError(err) {
+  const code = err?.code || "";
+  const message = err?.message || "";
+
+  if (message.includes("requires an index") || code === "failed-precondition") {
+    return "Thiếu Firestore index cho truy vấn báo cáo của giám đốc. Hãy mở Console trình duyệt và bấm link Create Index.";
+  }
+
+  if (code === "permission-denied" || message.includes("Missing or insufficient permissions")) {
+    return "Firestore Rules vẫn đang chặn quyền đọc báo cáo của giám đốc.";
+  }
+
+  return "Không thể tải dữ liệu báo cáo. Vui lòng thử lại sau.";
+}
+
 export default function Reports({
   isAdmin = false,
   isDirector = false,
@@ -341,21 +356,10 @@ export default function Reports({
               const directorUid = String(item?.director?.uid || "").trim();
               const flatDirectorUid = String(item?.directorUid || "").trim();
 
-              if (ownerUid && currentUid && ownerUid === currentUid) {
-                return true;
-              }
-
-              if (directorUid && currentUid && directorUid === currentUid) {
-                return true;
-              }
-
-              if (flatDirectorUid && currentUid && flatDirectorUid === currentUid) {
-                return true;
-              }
-
-              if (employeeUid && managedEmployeeIds.has(employeeUid)) {
-                return true;
-              }
+              if (ownerUid && currentUid && ownerUid === currentUid) return true;
+              if (directorUid && currentUid && directorUid === currentUid) return true;
+              if (flatDirectorUid && currentUid && flatDirectorUid === currentUid) return true;
+              if (employeeUid && managedEmployeeIds.has(employeeUid)) return true;
 
               return false;
             }
@@ -371,8 +375,6 @@ export default function Reports({
           if (prev && rows.some((r) => r.id === prev)) return prev;
           return rows[0].id;
         });
-
-        setError("");
       } catch (err) {
         console.error("Reports filter error:", err);
         setItems([]);
@@ -414,7 +416,7 @@ export default function Reports({
           console.error("Admin reports snapshot error:", err);
           setItems([]);
           setSelectedId("");
-          setError("Không thể tải dữ liệu báo cáo. Vui lòng thử lại sau.");
+          setError(explainFirestoreError(err));
         }
       );
 
@@ -452,6 +454,7 @@ export default function Reports({
         (err) => {
           console.error("Own reports snapshot error:", err);
           ownReportsCache = [];
+          setError(explainFirestoreError(err));
           applyFilter();
         }
       );
@@ -465,6 +468,7 @@ export default function Reports({
         (err) => {
           console.error("Director object snapshot error:", err);
           directorReportsCache = [];
+          setError(explainFirestoreError(err));
           applyFilter();
         }
       );
@@ -478,6 +482,7 @@ export default function Reports({
         (err) => {
           console.error("Director UID snapshot error:", err);
           directorUidReportsCache = [];
+          setError(explainFirestoreError(err));
           applyFilter();
         }
       );
