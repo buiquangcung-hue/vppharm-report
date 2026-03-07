@@ -6,6 +6,7 @@ import {
   orderBy,
   query,
   limit,
+  where,
 } from "firebase/firestore";
 import {
   BarChart3,
@@ -626,6 +627,22 @@ function buildScopeLabel(isAdmin, isDirector, profile) {
   return "Giới hạn";
 }
 
+function mergeUniqueReports(...groups) {
+  const map = new Map();
+
+  groups.flat().forEach((item) => {
+    if (!item?.id) return;
+    const existing = map.get(item.id);
+    if (!existing) {
+      map.set(item.id, item);
+      return;
+    }
+    map.set(item.id, { ...existing, ...item });
+  });
+
+  return [...map.values()].sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
+}
+
 export default function Dashboard({
   isAdmin = false,
   isDirector = false,
@@ -665,16 +682,13 @@ export default function Dashboard({
     const currentUser = auth.currentUser;
     const currentUid = currentUser?.uid || "";
 
-    const reportsQuery = query(
-      collection(db, "weekly_reports"),
-      orderBy("createdAt", "desc"),
-      limit(500)
-    );
-
     const employeesQuery = query(collection(db, "employees"), limit(500));
 
-    let reportsCache = [];
     let employeesCache = [];
+    let adminReportsCache = [];
+    let ownReportsCache = [];
+    let directorReportsCache = [];
+    let directorUidReportsCache = [];
 
     function applyFilter() {
       try {
@@ -694,7 +708,15 @@ export default function Dashboard({
             .map((emp) => emp.id)
         );
 
-        const visibleReports = reportsCache
+        const sourceRows = isAdmin
+          ? adminReportsCache
+          : mergeUniqueReports(
+              ownReportsCache,
+              directorReportsCache,
+              directorUidReportsCache
+            );
+
+        const visibleReports = sourceRows
           .filter((item) => {
             if (isAdmin) return true;
 
@@ -702,8 +724,12 @@ export default function Dashboard({
               const ownerUid = String(item.ownerUid || "").trim();
               const employeeUid =
                 String(item.employeeUid || item?.input?.employee?.uid || "").trim();
+              const directorUid = String(item?.director?.uid || "").trim();
+              const flatDirectorUid = String(item?.directorUid || "").trim();
 
               if (ownerUid && currentUid && ownerUid === currentUid) return true;
+              if (directorUid && currentUid && directorUid === currentUid) return true;
+              if (flatDirectorUid && currentUid && flatDirectorUid === currentUid) return true;
               if (employeeUid && managedEmployeeIds.has(employeeUid)) return true;
 
               return false;
@@ -722,14 +748,7 @@ export default function Dashboard({
       }
     }
 
-    const unsubReports = onSnapshot(
-      reportsQuery,
-      (snap) => {
-        reportsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        applyFilter();
-      },
-      () => setError("Không thể tải dữ liệu báo cáo.")
-    );
+    const unsubscribers = [];
 
     const unsubEmployees = onSnapshot(
       employeesQuery,
@@ -737,12 +756,105 @@ export default function Dashboard({
         employeesCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         applyFilter();
       },
-      () => setError("Không thể tải danh mục nhân viên.")
+      () => {
+        employeesCache = [];
+        setError("Không thể tải danh mục nhân viên.");
+        applyFilter();
+      }
     );
+    unsubscribers.push(unsubEmployees);
+
+    if (isAdmin) {
+      const adminQuery = query(
+        collection(db, "weekly_reports"),
+        orderBy("createdAt", "desc"),
+        limit(500)
+      );
+
+      const unsubAdmin = onSnapshot(
+        adminQuery,
+        (snap) => {
+          adminReportsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          applyFilter();
+        },
+        () => setError("Không thể tải dữ liệu báo cáo.")
+      );
+
+      unsubscribers.push(unsubAdmin);
+    }
+
+    if (isDirector) {
+      const ownReportsQuery = query(
+        collection(db, "weekly_reports"),
+        where("ownerUid", "==", currentUid),
+        orderBy("createdAt", "desc"),
+        limit(500)
+      );
+
+      const directorObjectQuery = query(
+        collection(db, "weekly_reports"),
+        where("director.uid", "==", currentUid),
+        orderBy("createdAt", "desc"),
+        limit(500)
+      );
+
+      const directorUidQuery = query(
+        collection(db, "weekly_reports"),
+        where("directorUid", "==", currentUid),
+        orderBy("createdAt", "desc"),
+        limit(500)
+      );
+
+      const unsubOwn = onSnapshot(
+        ownReportsQuery,
+        (snap) => {
+          ownReportsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          applyFilter();
+        },
+        (err) => {
+          console.error("Dashboard own reports snapshot error:", err);
+          ownReportsCache = [];
+          applyFilter();
+        }
+      );
+
+      const unsubDirectorObject = onSnapshot(
+        directorObjectQuery,
+        (snap) => {
+          directorReportsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          applyFilter();
+        },
+        (err) => {
+          console.error("Dashboard director object snapshot error:", err);
+          directorReportsCache = [];
+          applyFilter();
+        }
+      );
+
+      const unsubDirectorUid = onSnapshot(
+        directorUidQuery,
+        (snap) => {
+          directorUidReportsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          applyFilter();
+        },
+        (err) => {
+          console.error("Dashboard directorUid snapshot error:", err);
+          directorUidReportsCache = [];
+          applyFilter();
+        }
+      );
+
+      unsubscribers.push(unsubOwn, unsubDirectorObject, unsubDirectorUid);
+    }
 
     return () => {
-      unsubReports();
-      unsubEmployees();
+      unsubscribers.forEach((unsub) => {
+        try {
+          unsub?.();
+        } catch {
+          // ignore
+        }
+      });
     };
   }, [isAdmin, isDirector, profile?.name]);
 
@@ -1107,28 +1219,52 @@ export default function Dashboard({
         }
 
         const executiveData = {
-          executiveSummary: data?.executiveSummary || "",
-          systemRisks: Array.isArray(data?.systemRisks) ? data.systemRisks : [],
+          executiveSummary:
+            data?.executiveSummary ||
+            data?.executive_summary ||
+            data?.summary ||
+            "",
+          systemRisks: Array.isArray(data?.systemRisks)
+            ? data.systemRisks
+            : Array.isArray(data?.system_risks)
+            ? data.system_risks
+            : [],
           keyOpportunities: Array.isArray(data?.keyOpportunities)
             ? data.keyOpportunities
+            : Array.isArray(data?.key_opportunities)
+            ? data.key_opportunities
             : [],
           performanceAlerts: Array.isArray(data?.performanceAlerts)
             ? data.performanceAlerts
+            : Array.isArray(data?.performance_alerts)
+            ? data.performance_alerts
             : [],
-          notableTrends: Array.isArray(data?.notableTrends) ? data.notableTrends : [],
+          notableTrends: Array.isArray(data?.notableTrends)
+            ? data.notableTrends
+            : Array.isArray(data?.notable_trends)
+            ? data.notable_trends
+            : [],
           employeeInsights: Array.isArray(data?.employeeInsights)
             ? data.employeeInsights
+            : Array.isArray(data?.employee_insights)
+            ? data.employee_insights
             : [],
           provinceInsights: Array.isArray(data?.provinceInsights)
             ? data.provinceInsights
+            : Array.isArray(data?.province_insights)
+            ? data.province_insights
             : [],
           productInsights: Array.isArray(data?.productInsights)
             ? data.productInsights
+            : Array.isArray(data?.product_insights)
+            ? data.product_insights
             : [],
           strategicActions: Array.isArray(data?.strategicActions)
             ? data.strategicActions
+            : Array.isArray(data?.strategic_actions)
+            ? data.strategic_actions
             : [],
-          durationMs: data?.durationMs || 0,
+          durationMs: data?.durationMs || data?.duration_ms || 0,
           executive_input: data?.executive_input || null,
         };
 
